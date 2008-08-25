@@ -1,0 +1,41 @@
+
+// A couple of useful macros and functions used inside of pate_engine.cpp and pate_plugin.cpp.
+
+#ifndef PATE_UTILITIES_H
+#define PATE_UTILITIES_H
+
+#include "Python.h"
+
+class QString;
+
+
+// Python < 2.4 fix
+#if (PY_MAJOR_VERSION == 2) && (PY_MINOR_VERSION < 5)
+#define PY_IMPORT_NAME_CAST(x) const_cast<char*>(x)
+#else
+#define PY_IMPORT_NAME_CAST(x) x
+#endif
+
+// terminal colours
+#define TERMINAL_RED "\033[31m"
+#define TERMINAL_CLEAR "\033[0m"
+
+// save us some ruddy time when printing out QStrings with UTF-8
+#define PQ(x) x.toUtf8().constData()
+
+namespace Pate { namespace Py {
+
+// Convert a QString to a Python unicode object
+PyObject *unicode(const QString &string);
+// Call a function, displaying a traceback in STDERR if it fails
+bool call(PyObject *function, PyObject *arguments);
+bool call(PyObject *function);
+// Append a QString to a list as a Python unicode object
+void appendStringToList(PyObject *list, const QString &value);
+// Print a Python traceback to standard error when an error has occured,
+// giving a high-level description of what happened
+void traceback(const QString &description);
+
+}} // namespace Py, namespace Pate
+
+#endif

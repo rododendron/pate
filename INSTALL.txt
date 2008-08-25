@@ -1,0 +1,52 @@
+╔════════════════════════════════╗
+║ Pâté Installation Instructions ║
+╚════════════════════════════════╝
+
+Pâté requires that you have installed:
+
+  ∙ Qt4
+  ∙ KDE4
+  ∙ sip
+  ∙ PyQt4
+  ∙ PyKDE4
+  ∙ Kate
+
+Most Linux distributions should provide packages for these. More details on
+which specific packages are required for different distros is listed below.
+
+
+┌────────────────────────────────────┐
+│ General Installation Instructions  │
+└────────────────────────────────────┘
+
+In the directory that you extracted Pâté, run
+
+ $ ./configure
+ $ cd build
+ $ make
+ # make install (as root)
+
+
+┌────────────────────────────────────┐
+│ Distribution-specific Information  │
+└────────────────────────────────────┘
+
+ ∙ openSUSE 10.3
+
+   1. Add the KDE:KDE4 stable repository by visiting http://en.opensuse.org/KDE4,
+      clicking on the One-Click Install button, and following the wizard that follows.
+   2. Install kde4-kate-devel and python-qt4 using YaST or zypper
+      (e.g by running 'zypper install kde4-kate-devel python-qt4').
+      Doing so should pull in all other necessary dependancies.
+   3. As of the time of writing (26/02/2008) there are no PyKDE4 bindings in the repository,
+      which is fairly criminal. You'll have to compile PyKDE4 yourself for now.
+
+
+
+Don't see your distro here? Drop me an email with instructions at paul@giannaros.org.
+Also email me in the likely event that I have made a mistake with the instructions!
+
+Enjoy Pâté!
+
+Paul <paul@giannaros.org>
+
