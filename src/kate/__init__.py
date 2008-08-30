@@ -201,3 +201,8 @@ application = Kate.application()
 ''' The global document manager for this Kate application '''
 documentManager = application.documentManager()
 
+def mainWindow():
+    ''' The QWidget-derived main Kate window currently showing. A
+    shortcut around kate.application.activeMainWindow().window() '''
+    return application.activeMainWindow().window()
+
