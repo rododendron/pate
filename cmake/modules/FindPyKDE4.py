@@ -29,17 +29,8 @@ if "_pkg_config" in dir(PyKDE4.pykdeconfig):
             if os.path.exists(d):
                 varvalue = d
         print("%s:%s\n" % (varname, varvalue))
-    pykde_version_tag = ''
-    in_t = False
-    for item in _pkg_config['pykde_kde_sip_flags'].split():
-        if item == "-t":
-            in_t = True
-        elif in_t:
-            if item.startswith("KDE_"):
-                pykde_version_tag = item
-        else:
-            in_t = False
-    print("pykde_version_tag:%s" % pykde_version_tag)
+    tag = 'KDE_%s' % _pkg_config['kde_version_str'].replace('.', '_')
+    print("pykde_version_tag:%s" % tag)
 
 else:
     sys.exit(1)

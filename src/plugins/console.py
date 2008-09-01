@@ -14,7 +14,6 @@ from PyQt4 import QtCore, QtGui
 
 import kate
 
-
 # @kate.init
 # def foo():
     # print 'on kate.init: hello world'
@@ -75,7 +74,18 @@ class Exit:
         w.close()
 
 
+class Helper:
+    def __init__(self, console):
+        self.console = console
+    
+    def __call__(self, o):
+        s = self.console.state
+        self.console.state = 'help'
+        help(o)
+
+
 class KateConsoleHighlighter(QtGui.QSyntaxHighlighter):
+    ''' Pretty ruddy convulted, but still pretty awesome '''
     def __init__(self, console):
         self.console = console
         QtGui.QSyntaxHighlighter.__init__(self, console.document())
@@ -86,7 +96,9 @@ class KateConsoleHighlighter(QtGui.QSyntaxHighlighter):
             ('string', QtGui.QColor(190, 3, 3)),
             ('name', QtGui.QColor('green')),
             ('integer', QtGui.QColor(0, 20, 255)),
-            ('float', QtGui.QColor(176, 126, 0))
+            ('float', QtGui.QColor(176, 126, 0)),
+            ('help', QtGui.QColor('green')),
+            ('exception', QtGui.QColor(180, 3, 3)),
         ):
             format = QtGui.QTextCharFormat()
             format.setForeground(QtGui.QBrush(color))
@@ -125,8 +137,8 @@ class KateConsoleHighlighter(QtGui.QSyntaxHighlighter):
                 line = '"""' + line
                 offset -= 3
                 # print 'set'
-            print state, line
-            print 'offset:', offset
+            # print state, line
+            # print 'offset:', offset
             # tokeniize
             tokens = tok(line)
             for token in tokens:
@@ -159,6 +171,12 @@ class KateConsoleHighlighter(QtGui.QSyntaxHighlighter):
                         if format is not None:
                             self.setFormat(offset + start, end - start, format)
                 # print line, tok(line)
+        elif self.console.helping:
+            self.setFormat(0, len(line), self.helpFormat)
+        elif self.console.excepting:
+            self.setFormat(0, len(line), self.exceptionFormat)
+        else:
+            print 'unknown state:', self.console.state
         
     def handleName(self, token):
         name = token[1]
@@ -174,7 +192,6 @@ class KateConsoleHighlighter(QtGui.QSyntaxHighlighter):
         value = token[1]
         if value in ('"', "'"):
             self.overrideFormat = self.stringFormat
-            print 'yah'
     
     def handleNumber(self, token):
         number = token[1]
@@ -192,7 +209,6 @@ class KateConsole(QtGui.QTextEdit):
         self.setWordWrapMode(QtGui.QTextOption.WrapAnywhere)
         font = QtGui.QFont('monospace')
         self.setFont(font)
-        print font.family()
         self.keyToMethod = {}
         # font = 
         for methodName in dir(self):
@@ -211,14 +227,31 @@ class KateConsole(QtGui.QTextEdit):
             'Kate': kate.Kate,
             'exit': exit,
             'quit': exit,
+            'help': Helper(self)
         }
         self.console = Console(builtins)
         self.console.write = self.displayResult
-        self.inputting = True
+        self.console.showtraceback = self.showTraceback
         self.state = 'normal'
         self.setPlainText(self.prompt)
         KateConsoleHighlighter(self)
         QtCore.QTimer.singleShot(0, self.moveCursorToEnd)
+    
+    def showTraceback(self):
+        self.state = 'exception'
+        code.InteractiveConsole.showtraceback(self.console)
+    
+    @property
+    def inputting(self):
+        return self.state in ('normal', 'more')
+    
+    @property
+    def helping(self):
+        return self.state == 'help'
+    
+    @property
+    def excepting(self):
+        return self.state == 'exception'
     
     def moveCursorToEndIfNecessary(self):
         cursor = self.textCursor()
@@ -281,16 +314,14 @@ class KateConsole(QtGui.QTextEdit):
         return self.textCursor().blockNumber()
     
     def displayResult(self, r):
-        # print 'display:', repr(r)
         self.insertPlainText(r)
     
     def keyReturn(self):
         line = self.line
         self.append('')
-        self.inputting = False
+        self.state = 'unknown'
         self.moveCursorToEnd()
         more = self.console.push(line)
-        self.inputting = True
         if more:
             self.state = 'more'
         else:
@@ -339,7 +370,7 @@ class KateConsoleDialog(QtGui.QDialog):
         layout.setSpacing(0)
         self.console = KateConsole(self)
         layout.addWidget(self.console)
-        self.resize(450, 320)
+        self.resize(600, 420)
     
     def closeEvent(self, e):
         # XX save size and position
