@@ -10,4 +10,4 @@ target_link_libraries(pateplugin ${KDE4_KDEUI_LIBS} ${PYTHON_LIBRARY} kateinterf
 
 install(TARGETS pateplugin DESTINATION ${PLUGIN_INSTALL_DIR})
 install(FILES pate.desktop DESTINATION ${SERVICES_INSTALL_DIR})
-install(DIRECTORY kate DESTINATION share/apps/kate/plugins/pate)
+install(DIRECTORY kate DESTINATION ${DATA_INSTALL_DIR}/kate/plugins/pate)

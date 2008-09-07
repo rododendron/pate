@@ -28,7 +28,7 @@ Pate::PluginView::PluginView(Kate::MainWindow *window) : Kate::PluginView(window
 
 
 Pate::Plugin::Plugin(QObject *parent, const QStringList &) : Kate::Plugin((Kate::Application*) parent) {
-    std::cout << "Plugin::Plugin\n";
+//     std::cout << "Plugin::Plugin\n";
     // initialise the Python engine
     if(!Pate::Engine::self()->init()) {
         std::cerr << TERMINAL_RED << "Could not initialise Pate. Ouch!\n" << TERMINAL_CLEAR;
