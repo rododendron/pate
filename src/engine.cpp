@@ -124,10 +124,10 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
         QDirIterator it(directory, QDirIterator::Subdirectories);
         while(it.hasNext()) {
             QString path = it.next();
-//             std::cout << "reading " << (const char*) subdirectory.toUtf8() << "\n";
-            if(path.endsWith("/..")) {
+//             std::cout << "reading " << PQ(path) << "\n";
+            if(path.endsWith("/.")) {
                 // ooooh. Add the directory the sys.path
-                path = path.left(path.size() - 3);
+                path = path.left(path.size() - 2);
                 PyObject *d = Py::unicode(path);
                 PyList_Insert(pythonPath, 0, d);
                 Py_DECREF(d);
@@ -140,10 +140,10 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
                 PyObject *plugin = PyImport_ImportModule(PY_IMPORT_NAME_CAST(PQ(pluginName)));
                 if(plugin) {
                     PyList_Append(plugins, plugin);
-                    std::cout << "loaded " << PQ(pluginName) << "\n";
+//                     std::cout << "loaded " << PQ(pluginName) << "\n";
                 }
                 else {
-                    Py::traceback(QString("Could not load plugin ''").arg(pluginName));
+                    Py::traceback(QString("Could not load plugin '%1'").arg(pluginName));
                 }
             }
         }

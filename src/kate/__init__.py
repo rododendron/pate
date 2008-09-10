@@ -206,3 +206,15 @@ def mainWindow():
     shortcut around kate.application.activeMainWindow().window() '''
     return application.activeMainWindow().window()
 
+def activeView():
+    ''' The currently active view. Access its KTextEditor.Document
+    by calling document() on it (or by using kate.activeDocument()).
+    This is a shortcut for kate.application.activeMainWindow().activeView()'''
+    return application.activeMainWindow().activeView()
+
+def activeDocument():
+    ''' The document for the currently active view '''
+    return activeView().document()
+
+    
+
