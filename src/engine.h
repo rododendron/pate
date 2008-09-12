@@ -32,6 +32,13 @@ public:
     /// dictionary
     PyObject *configuration();
     
+    /// This engine's embedded Python module's dictionary
+    PyObject *moduleDictionary();
+    
+    /// A PyObject* for an arbitrary Qt/KDE object that has been wrapped
+    /// by SIP. Nifty.
+    PyObject *wrap(void *o, QString className);
+    
     /// Close the interpreter and unload it from memory. Called 
     /// automatically by the destructor, so you shouldn't need it yourself
     void die();

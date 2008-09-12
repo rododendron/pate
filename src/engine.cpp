@@ -7,6 +7,7 @@
 
 #include <kglobal.h>
 #include <kstandarddirs.h>
+#include <kdebug.h>
 #include <kate/application.h>
 
 #include <iostream>
@@ -121,11 +122,12 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
     foreach(QString directory, KGlobal::dirs()->findDirs("appdata", "pate")) {
         // add the directory to pate.pluginDirectories and then traverse it
         Py::appendStringToList(pluginDirectories, directory);
-        QDirIterator it(directory, QDirIterator::Subdirectories);
+        QDirIterator it(directory, QDirIterator::Subdirectories | QDirIterator::FollowSymlinks);
         while(it.hasNext()) {
             QString path = it.next();
-//             std::cout << "reading " << PQ(path) << "\n";
+            kDebug() << "reading " << PQ(path);
             if(path.endsWith("/.")) {
+                kDebug() << "adding directory to Python path";
                 // ooooh. Add the directory the sys.path
                 path = path.left(path.size() - 2);
                 PyObject *d = Py::unicode(path);
@@ -134,6 +136,7 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
 //                 std::cout << "Added " << PQ(path) << " to el path\n";
             }
             else if(path.endsWith(".py")) {
+                kDebug() << "importing Python module";
                 QString pluginName = path.section('/', -1).section('.', 0, 0);
                 // apparently 2.4 takes a char* as the param to ImportModule. This
                 // accounts for that.
@@ -153,6 +156,38 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
 
 PyObject *Pate::Engine::configuration() {
     return m_configuration;
+}
+PyObject *Pate::Engine::moduleDictionary() {
+    init();
+    PyObject *pate = PyImport_ImportModule(PATE_MODULE_NAME);
+    return PyModule_GetDict(pate);
+}
+PyObject *Pate::Engine::wrap(void *o, QString fullClassName) {
+    PyObject *sip = PyImport_ImportModule("sip");
+    if(!sip) {
+        Py::traceback("Could not import the sip module.");
+        return 0;
+    }
+    QString classModuleName = fullClassName.section('.', 0, -2);
+    QString className = fullClassName.section('.', -1);
+    PyObject *classModule = PyImport_ImportModule(classModuleName.toAscii().data());
+    if(!classModule) {
+        Py::traceback(QString("Could not import %1.").arg(classModuleName));
+        return 0;
+    }
+    PyObject *classObject = PyDict_GetItemString(PyModule_GetDict(classModule), className.toAscii().data());
+    if(!classObject) {
+        Py::traceback(QString("Could not get item %1 from module %2").arg(className).arg(classModuleName));
+        return 0;
+    }
+    PyObject *wrapInstance = PyDict_GetItemString(PyModule_GetDict(sip), "wrapinstance");
+    PyObject *arguments = Py_BuildValue("NO", PyLong_FromVoidPtr(o), classObject);
+    PyObject *result = PyObject_CallObject(wrapInstance, arguments);
+    if(!result) {
+        Py::traceback("failed to wrap instance");
+        return 0;
+    }
+    return result;
 }
 
 #include "engine.moc"

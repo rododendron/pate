@@ -176,7 +176,8 @@ class KateConsoleHighlighter(QtGui.QSyntaxHighlighter):
         elif self.console.excepting:
             self.setFormat(0, len(line), self.exceptionFormat)
         else:
-            print 'unknown state:', self.console.state
+            # print 'unknown state:', self.console.state
+            pass
         
     def handleName(self, token):
         name = token[1]

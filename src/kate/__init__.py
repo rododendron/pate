@@ -2,6 +2,7 @@
 ''' Kate module. '''
 
 import sys
+import os
 import functools
 
 import pate
@@ -19,8 +20,13 @@ initialized = False
 
 # Plugin API
 
+# Configuration
+
 class Configuration:
-    ''' Configuration objects provide a configuration dictionary.
+    ''' Configuration objects provide a configuration dictionary that is
+    plugin-specific -- that is, each plugin uses kate.configuration and the
+    class automatically creates a plugin-specific dictionary to it.
+    
     The config is saved and loaded from disk automatically for minimal user hassle.
     Just go ahead and use kate.configuration as a persistent dictionary.
     Do not instantiate your own Configuration object; use kate.configuration instead.
@@ -96,12 +102,14 @@ configuration = Configuration(pate.configuration)
 
 
 def event(**attributes):
-    # utility decorator that we wrap events init
+    # utility decorator that we wrap events in. Simply initialises
+    # attributes on the function object to make code nicer.
     def decorator(func):
         for key, value in attributes.items():
             setattr(func, key, value)
         return func
     return decorator
+
 
 # Decorator event listeners
 
@@ -154,6 +162,47 @@ def action(text, icon=None, shortcut=None, menu=None):
         return func
     return decorator
 
+# End decorators
+
+# API functions and objects
+
+''' The global Kate::Application instance '''
+application = Kate.application()
+
+''' The global document manager for this Kate application '''
+documentManager = application.documentManager()
+
+def mainWindow():
+    ''' The QWidget-derived main Kate window currently showing. A
+    shortcut around kate.application.activeMainWindow().window() '''
+    return application.activeMainWindow().window()
+
+def activeView():
+    ''' The currently active view. Access its KTextEditor.Document
+    by calling document() on it (or by using kate.activeDocument()).
+    This is a shortcut for kate.application.activeMainWindow().activeView()'''
+    return application.activeMainWindow().activeView()
+
+def activeDocument():
+    ''' The document for the currently active view '''
+    return activeView().document()
+
+def applicationDirectories(*path):
+    path = os.path.join('pate', *path)
+    return map(unicode, kdecore.KGlobal.dirs().findDirs("appdata", path))
+
+
+def popup(*message, **kwargs):
+    ''' Modeless message displaying, for providing the user with status
+    updates.
+    Keyword arguments:
+    * icon - icon to be loaded
+    * timeout - the time (in seconds) that the popup should be displayed
+                for. Defaults to five seconds '''
+    # TODO implement me
+    sys.stdout.write(' '.join(map(unicode, message)) + '\n')
+
+
 
 # Initialisation
 
@@ -193,28 +242,4 @@ def pateInit():
 # called by pate on initialisation
 pate._init = pateInit
 del pateInit
-
-
-''' The global Kate::Application instance '''
-application = Kate.application()
-
-''' The global document manager for this Kate application '''
-documentManager = application.documentManager()
-
-def mainWindow():
-    ''' The QWidget-derived main Kate window currently showing. A
-    shortcut around kate.application.activeMainWindow().window() '''
-    return application.activeMainWindow().window()
-
-def activeView():
-    ''' The currently active view. Access its KTextEditor.Document
-    by calling document() on it (or by using kate.activeDocument()).
-    This is a shortcut for kate.application.activeMainWindow().activeView()'''
-    return application.activeMainWindow().activeView()
-
-def activeDocument():
-    ''' The document for the currently active view '''
-    return activeView().document()
-
-    
 

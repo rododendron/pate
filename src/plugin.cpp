@@ -48,10 +48,14 @@ Kate::PluginView *Pate::Plugin::createView(Kate::MainWindow *window) {
  * make it appear as though it is module-specific. 
  * Atomic Python types are stored by writing their representation to the config file
  * on save and evaluating them back to a Python type on load.
+ * XX should probably pickle.
  */
 void Pate::Plugin::readSessionConfig(KConfigBase *config, const QString &) {
     if(!Pate::Engine::self()->isInitialised())
         return;
+    PyObject *d = Pate::Engine::self()->moduleDictionary();
+    kDebug() << "setting configuration";
+    PyDict_SetItemString(d, "sessionConfiguration", Pate::Engine::self()->wrap((void *) config, "PyKDE4.kdecore.KConfigBase"));
     if(!config->hasGroup("Pate"))
         return;
     // relatively safe evaluation environment for Pythonizing the serialised types:

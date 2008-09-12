@@ -1,6 +1,9 @@
 
 import kate
-
+import os
+# imp module used for custom importing, provides hooks into
+# Python's import mechanism
+import imp 
 
 class ParseError(Exception):
     pass
@@ -77,7 +80,7 @@ def matchingParenthesisPosition(document, position, opening='('):
     state = None
     while 1:
         character = unichr(document.character(position).unicode())
-        print 'character:', repr(character)
+        # print 'character:', repr(character)
         if state in ('"', "'"):
             if character == state:
                 state = None
@@ -97,6 +100,9 @@ def matchingParenthesisPosition(document, position, opening='('):
         # must we move down a line?
         if document.character(position).isNull():
             position.setPosition(position.line() + delta, 0)
+            if delta == -1:
+                # move to the far right
+                position.setColumn(document.lineLength(position.line()) - 1)
             # failure again => EOF
             if document.character(position).isNull():
                 raise ParseError('end of file reached')
@@ -105,23 +111,100 @@ def matchingParenthesisPosition(document, position, opening='('):
                     raise ParseError('end of line while searching for %s' % state)
     return position
 
+# map of 'all' => {'name': func1, ....}
+# map of 'mime/type' => {'name': func1, 'name2': func2}
+expansionCache = {}
+
+
+def loadFileExpansions(path):
+    name = os.path.basename(path).split('.')[0]
+    module = imp.load_source(name, path)
+    expansions = {}
+    # expansions are everything that don't begin with '__' and are callable
+    for name in dir(module):
+        o = getattr(module, name)
+        # ignore builtins. Note that it is callable.__name__ that is used
+        # to set the expansion key so you are free to reset it to something
+        # starting with two underscores (or more importantly, a Python
+        # keyword)
+        if not name.startswith('__') and callable(o):
+            expansions[o.__name__] = o
+    return expansions
+
+def loadExpansions(mime):
+    if mime not in expansionCache:
+        expansions = {}
+        # explicit is better than implicit
+        mimeFileName = mime.replace('/', '_') + '.expand'
+        for directory in kate.applicationDirectories('expand'):
+            if os.path.exists(os.path.join(directory, mimeFileName)):
+                expansions.update(loadFileExpansions(os.path.join(directory, mimeFileName)))
+        # load global expansions if necessary``
+        expansionCache[mime] = loadExpansions('all') if mime != 'all' else {}
+        expansionCache[mime].update(expansions)
+    return expansionCache[mime]
 
 
 @kate.action('Expand', shortcut='Ctrl+E', menu='Edit')
 def expandAtCursor():
     document = kate.activeDocument()
+    view = document.activeView()
     try:
-        word_range, argument_range = wordAndArgumentAtCursorRanges(document)
+        word_range, argument_range = wordAndArgumentAtCursorRanges(document, view.cursorPosition())
     except ParseError, e:
-        print 'Parse error:', e
+        kate.popup('Parse error:', e)
         return
-    # get word and try to find word in map
+    # get word and try to find word i
+    word = unicode(document.text(word_range))
+    mime = str(document.mimeType())
+    expansions = loadExpansions(mime)
+    try:
+        func = expansions[word]
+    except KeyError:
+        kate.popup('Expansion %r not found' % word)
+        return
+    argument = ()
+    if argument_range is not None:
+        argument = (unicode(document.text(argument_range)),)
+    # document.removeText(word_range)
+    try:
+        replacement = func(*argument)
+    except Exception, e:
+        kate.popup(e)
+        return
+    
+    try:
+        replacement = unicode(replacement)
+    except UnicodeEncodeError:
+        replacement = repr(replacement)
+    
+    insertPosition = word_range.start()
+    line = unicode(document.line(insertPosition.line()))
+    # autoindent: add the line's leading whitespace for each newline
+    # in the expansion
+    whitespace = ''
+    for character in line:
+        if character in ' \t':
+            whitespace += character
+        else:
+            break
+    replacement = replacement.replace('\n', '\n' + whitespace)
+    # cursor position set?
+    cursorAdvancement = None
+    if '\1' in replacement:
+        cursorAdvancement = replacement.index('\1')
+        # strip around that byte
+        replacement = replacement[:cursorAdvancement] + replacement[cursorAdvancement + 1:]
+    # make the removal and insertion an atomic operation
     document.startEditing()
     if argument_range is not None:
-        argument = unicode(document.text(argument_range))
         document.removeText(argument_range)
-    else:
-        argument = None
+    document.removeText(word_range)
+    document.insertText(insertPosition, replacement)
+    if cursorAdvancement is not None:
+        smart = document.smartInterface().newSmartCursor(insertPosition)
+        smart.advance(cursorAdvancement)
+        view.setCursorPosition(smart)
     document.endEditing()
 # while ( cursor.column() > 0 && highlight()->isInWord( l->at( cursor.column() - 1 ), l->attribute( cursor.column() - 1 ) ) )
           # cursor.setColumn(cursor.column() - 1);

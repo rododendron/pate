@@ -1,0 +1,11 @@
+#!/usr/bin/python
+# ^ for Python syntax highlighting
+
+import __builtin__
+
+def eval(s):
+    # get automatic conversion to unicode or (that failing)
+    # a string representation
+    return __builtin__.eval(s)
+
+
