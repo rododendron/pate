@@ -43,7 +43,8 @@ public:
     /// automatically by the destructor, so you shouldn't need it yourself
     void die();
     
-    Engine(const QString &moduleName);
+    void loadPlugins();
+    void unloadPlugins();
 
 // signals:
 //     void populateConfiguration(PyObject *configurationDictionary);
@@ -60,6 +61,7 @@ private:
     static Engine *m_self;
     QLibrary *m_pythonLibrary;
     bool m_initialised;
+    bool m_pluginsLoaded;
     PyObject *m_configuration;
 };
 

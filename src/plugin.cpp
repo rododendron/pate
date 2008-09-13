@@ -33,9 +33,13 @@ Pate::Plugin::Plugin(QObject *parent, const QStringList &) : Kate::Plugin((Kate:
     if(!Pate::Engine::self()->init()) {
         std::cerr << TERMINAL_RED << "Could not initialise Pate. Ouch!\n" << TERMINAL_CLEAR;
     }
+    Pate::Engine::self()->loadPlugins();
 }
 
 Pate::Plugin::~Plugin() {
+    Pate::Engine *p = Pate::Engine::self();
+    p->unloadPlugins();
+    kDebug() << "Plugin deleted";
 }
 
 

@@ -22,16 +22,8 @@
 #define PATE_MODULE_NAME "pate" 
 
 
-static PyObject *pate__init(PyObject *self, PyObject *args) {
-    std::cerr << "pate._init() called. This annoys me. Set me to something nice!\n";
-    Py_INCREF(Py_None);
-    return Py_None;
-}
 
 static PyMethodDef pateMethods[] = {
-    {"_init", pate__init, METH_VARARGS, "A callback called when Pate is initialised \
-    and all plugins have been loaded. Should be overriden elsewhere -- the default \
-    implementation does nothing"},
     {NULL, NULL, 0, NULL}
 };
 
@@ -40,6 +32,7 @@ Pate::Engine* Pate::Engine::m_self = 0;
 Pate::Engine::Engine(QObject *parent) : QObject(parent) {
     m_initialised = false;
     m_pythonLibrary = 0;
+    m_pluginsLoaded = false;
     m_configuration = PyDict_New();
 }
 
@@ -50,14 +43,6 @@ Pate::Engine::~Engine() {
     if(m_initialised) {
         die();
     }
-}
-
-void Pate::Engine::die() {
-    Py_Finalize();
-    // unload the library from memory
-    m_pythonLibrary->unload();
-    m_pythonLibrary = 0;
-    m_initialised = false;
 }
 
 Pate::Engine* Pate::Engine::self() {
@@ -80,6 +65,7 @@ bool Pate::Engine::init() {
         return false;
     }
     Py_Initialize();
+    PyEval_InitThreads();
     // initialise our built-in module and import it
     Py_InitModule(PATE_MODULE_NAME, pateMethods);
     PyObject *pate = PyImport_ImportModule(PATE_MODULE_NAME);
@@ -96,15 +82,69 @@ bool Pate::Engine::init() {
         die();
         return false;
     }
-    // find plugins and load them. Awesome.
-    findAndLoadPlugins(pateModuleDictionary);
-    // everything is loaded and started. Call the module's init callback
-    if(!Py::call(PyDict_GetItemString(pateModuleDictionary, "_init"))) {
-        std::cerr << "Could not call " << PATE_MODULE_NAME << "._init(). Dieing..\n";
-        die();
-    }
     m_initialised = true;
     return true;
+}
+
+void Pate::Engine::die() {
+    Py_Finalize();
+    // unload the library from memory
+    m_pythonLibrary->unload();
+    m_pythonLibrary = 0;
+    m_pluginsLoaded = false;
+    m_initialised = false;
+}
+
+void Pate::Engine::loadPlugins() {
+    if(m_pluginsLoaded)
+        return;
+    init();
+    PyObject *pate = PyImport_ImportModule(PATE_MODULE_NAME);
+    PyObject *pateModuleDictionary = PyModule_GetDict(pate);
+    // find plugins and load them.
+    findAndLoadPlugins(pateModuleDictionary);
+    m_pluginsLoaded = true;
+    PyObject *func = PyDict_GetItemString(moduleDictionary(), "_pluginsLoaded");
+    if(!func) {
+        kDebug() << "No " << PATE_MODULE_NAME << "._pluginsLoaded set";
+        return;
+    }
+    // everything is loaded and started. Call the module's init callback
+    if(!Py::call(func)) {
+        std::cerr << "Could not call " << PATE_MODULE_NAME << "._pluginsLoaded(). Dieing..\n";
+        die();
+    }
+}
+
+void Pate::Engine::unloadPlugins() {
+    // We don't have the luxury of being able to unload Python easily while
+    // Kate is running. If anyone can find a way, feel free to tell me and
+    // I'll patch it in. Calling Py_Finalize crashes.
+    // So, clean up the best that we can.
+    if(!m_pluginsLoaded)
+        return;
+    kDebug() << "unloading";
+    PyObject *dict = moduleDictionary();
+    PyObject *func = PyDict_GetItemString(dict, "_pluginsUnloaded");
+    if(!func) {
+        kDebug() << "No " << PATE_MODULE_NAME << "._pluginsUnloaded set";
+        return;
+    }
+    // Remove each plugin from sys.modules
+    PyObject *modules = PyImport_GetModuleDict();
+    PyObject *plugins = PyDict_GetItemString(dict, "plugins");
+    for(Py_ssize_t i = 0, j = PyList_Size(plugins); i < j; ++i) {
+        PyObject *pluginName = PyDict_GetItemString(PyModule_GetDict(PyList_GetItem(plugins, i)), "__name__");
+        if(pluginName && PyDict_Contains(modules, pluginName)) {
+            PyDict_DelItem(modules, pluginName);
+            kDebug() << "Deleted" << PyString_AsString(pluginName) << "from sys.modules";
+        }
+    }
+    PyDict_DelItemString(dict, "plugins");
+    Py_DECREF(plugins);
+    m_pluginsLoaded = false;
+    if(!Py::call(func))
+        std::cerr << "Could not call " << PATE_MODULE_NAME << "._pluginsUnloaded().\n";
 }
 
 void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
@@ -138,9 +178,7 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
             else if(path.endsWith(".py")) {
                 kDebug() << "importing Python module";
                 QString pluginName = path.section('/', -1).section('.', 0, 0);
-                // apparently 2.4 takes a char* as the param to ImportModule. This
-                // accounts for that.
-                PyObject *plugin = PyImport_ImportModule(PY_IMPORT_NAME_CAST(PQ(pluginName)));
+                PyObject *plugin = PyImport_ImportModule(PQ(pluginName));
                 if(plugin) {
                     PyList_Append(plugins, plugin);
 //                     std::cout << "loaded " << PQ(pluginName) << "\n";

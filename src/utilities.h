@@ -9,13 +9,6 @@
 class QString;
 
 
-// Python < 2.4 fix
-#if (PY_MAJOR_VERSION == 2) && (PY_MINOR_VERSION < 5)
-#define PY_IMPORT_NAME_CAST(x) const_cast<char*>(x)
-#else
-#define PY_IMPORT_NAME_CAST(x) x
-#endif
-
 // terminal colours
 #define TERMINAL_RED "\033[31m"
 #define TERMINAL_CLEAR "\033[0m"

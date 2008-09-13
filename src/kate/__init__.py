@@ -191,6 +191,9 @@ def applicationDirectories(*path):
     path = os.path.join('pate', *path)
     return map(unicode, kdecore.KGlobal.dirs().findDirs("appdata", path))
 
+def sessionConfiguration():
+    if plugins:
+        return pate.sessionConfiguration
 
 def popup(*message, **kwargs):
     ''' Modeless message displaying, for providing the user with status
@@ -240,6 +243,22 @@ def pateInit():
             func()
     QtCore.QTimer.singleShot(0, _initPhase2)
 # called by pate on initialisation
-pate._init = pateInit
+pate._pluginsLoaded = pateInit
 del pateInit
 
+def pateDie():
+    # Unload actions or things will crash
+    global plugins, pluginDirectories
+    print 'pate die'
+    for a in action.actions:
+        for w in a.associatedWidgets():
+            w.removeAction(a)
+            # print 'removed %s from %s' % (a, w)
+    
+    # clear up
+    action.actions = set()
+    init.functions = set()
+    plugins = pluginDirectories = None
+        
+pate._pluginsUnloaded = pateDie
+del pateDie
