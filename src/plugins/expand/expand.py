@@ -1,9 +1,13 @@
 
 import kate
 import os
+import time
 # imp module used for custom importing, provides hooks into
 # Python's import mechanism
 import imp 
+
+from PyKDE4.kdecore import KConfig
+
 
 class ParseError(Exception):
     pass
@@ -145,6 +149,45 @@ def loadExpansions(mime):
     return expansionCache[mime]
 
 
+def indentationCharacters(document):
+    ''' The characters used to indent in a document as set by variables in the
+    document or in the configuration. Will be something like '\t' or '    '
+    '''
+    v = document.variableInterface()
+    # cache
+    if not hasattr(indentationCharacters, 'configurationUseTabs'):
+        config = KConfig('katerc')
+        group = config.group('Kate Document Defaults')
+        flags = str(group.readEntry('Basic Config Flags'))
+        # gross, but there's no public API for this. Growl.
+        indentationCharacters.configurationUseTabs = True
+        if flags and int(flags) & 0x2000000:
+            print 'insert spaces instead of tabulators'
+            indentationCharacters.configurationUseTabs = False
+        
+        indentWidth = str(group.readEntry('Indentation Width'))
+        indentationCharacters.configurationIndentWidth = int(indentWidth) if indentWidth else 4
+    # indent with tabs or spaces
+    useTabs = True
+    spaceIndent = unicode(v.variable('space-indent'))
+    if spaceIndent == 'on':
+        useTabs = False
+    elif spaceIndent == 'off':
+        useTabs = True
+    else:
+        useTabs = indentationCharacters.configurationUseTabs
+    
+    if useTabs:
+        return '\t'
+    else:
+        indentWidth = unicode(v.variable('indent-width'))
+        if indentWidth and indentWidth.isdigit():
+            return ' ' * int(indentWidth)
+        else:
+            # default
+            return ' ' * indentationCharacters.configurationIndentWidth
+
+
 @kate.action('Expand', shortcut='Ctrl+E', menu='Edit')
 def expandAtCursor():
     document = kate.activeDocument()
@@ -165,7 +208,8 @@ def expandAtCursor():
         return
     argument = ()
     if argument_range is not None:
-        argument = (unicode(document.text(argument_range)),)
+        # strip parentheses
+        argument = (unicode(document.text(argument_range))[1:-1],)
     # document.removeText(word_range)
     try:
         replacement = func(*argument)
@@ -177,7 +221,8 @@ def expandAtCursor():
         replacement = unicode(replacement)
     except UnicodeEncodeError:
         replacement = repr(replacement)
-    
+    #KateDocumentConfig::cfReplaceTabsDyn
+    replacement = replacement.replace('\n\t', '\n' + indentationCharacters(document))
     insertPosition = word_range.start()
     line = unicode(document.line(insertPosition.line()))
     # autoindent: add the line's leading whitespace for each newline
@@ -189,6 +234,7 @@ def expandAtCursor():
         else:
             break
     replacement = replacement.replace('\n', '\n' + whitespace)
+    print replacement
     # cursor position set?
     cursorAdvancement = None
     if '\1' in replacement:
@@ -201,11 +247,17 @@ def expandAtCursor():
         document.removeText(argument_range)
     document.removeText(word_range)
     document.insertText(insertPosition, replacement)
+    # end before moving the cursor to avoid a crash
+    document.endEditing()
+    
     if cursorAdvancement is not None:
+        print 'advancing', cursorAdvancement
         smart = document.smartInterface().newSmartCursor(insertPosition)
         smart.advance(cursorAdvancement)
         view.setCursorPosition(smart)
-    document.endEditing()
 # while ( cursor.column() > 0 && highlight()->isInWord( l->at( cursor.column() - 1 ), l->attribute( cursor.column() - 1 ) ) )
           # cursor.setColumn(cursor.column() - 1);
         # old = text( KTextEditor::Range(cursor, 1) );
+
+
+# kate: space-indent on;
