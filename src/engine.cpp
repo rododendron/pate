@@ -160,31 +160,30 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
     // get a reference to sys.path, then add the pate directory to it
     PyObject *sys = PyImport_ImportModule("sys");
     PyObject *pythonPath = PyDict_GetItemString(PyModule_GetDict(sys), "path");
-	QStack<QDir> directories;
+    QStack<QDir> directories;
     // now, find all directories that KDE knows about like ".../share/apps/kate/pate"
     foreach(QString directory, KGlobal::dirs()->findDirs("appdata", "pate")) {
-		kDebug() << "Push path" << directory;
-		directories.push(QDir(directory));
-	}
-	while(!directories.isEmpty()) {
-		QDir directory = directories.pop();
-		// add to pate.pluginDirectories and to sys.path
-		Py::appendStringToList(pluginDirectories, directory.path());
-		PyObject *d = Py::unicode(directory.path());
-		PyList_Insert(pythonPath, 0, d);
-		Py_DECREF(d);
+        kDebug() << "Push path" << directory;
+        directories.push(QDir(directory));
+    }
+    while(!directories.isEmpty()) {
+        QDir directory = directories.pop();
+        // add to pate.pluginDirectories and to sys.path
+        Py::appendStringToList(pluginDirectories, directory.path());
+        PyObject *d = Py::unicode(directory.path());
+        PyList_Insert(pythonPath, 0, d);
+        Py_DECREF(d);
         // traverse the directory to pate.pluginDirectories and then traverse it
-		QFileInfoList infoList = directory.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs | QDir::Files);
-		// directories first to add the path
+        QFileInfoList infoList = directory.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs | QDir::Files);
+        // directories first to add the path
         foreach(QFileInfo info, infoList) {
-			QString path = info.absoluteFilePath();
-			if(info.isDir()) {
-				kDebug() << "Push path" << info.canonicalPath();
-				directories.push(QDir(info.canonicalPath()));
-			}
+            QString path = info.absoluteFilePath();
+            if(info.isDir()) {
+                directories.push(QDir(info.absoluteFilePath()));
+            }
             else if(path.endsWith(".py")) {
                 kDebug() << "Loading" << path;
-				// import and add to pate.plugins
+                // import and add to pate.plugins
                 QString pluginName = path.section('/', -1).section('.', 0, 0);
                 PyObject *plugin = PyImport_ImportModule(PQ(pluginName));
                 if(plugin) {
@@ -194,9 +193,6 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
                     Py::traceback(QString("Could not load plugin %1").arg(pluginName));
                 }
             }
-			else {
-				kDebug() << "Odd path:" << path;
-			}
         }
 //         std::cout << "found " << PQ(directory) << "\n";
     }
@@ -240,4 +236,4 @@ PyObject *Pate::Engine::wrap(void *o, QString fullClassName) {
 
 #include "engine.moc"
 
-
+// kate: space-indent on;
