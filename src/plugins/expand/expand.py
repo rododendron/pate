@@ -210,6 +210,9 @@ def expandAtCursor():
     if argument_range is not None:
         # strip parentheses
         argument = (unicode(document.text(argument_range))[1:-1],)
+        # map foo() => foo
+        if argument == ('',):
+            argument = ()
     # document.removeText(word_range)
     try:
         replacement = func(*argument)
@@ -255,9 +258,6 @@ def expandAtCursor():
         smart = document.smartInterface().newSmartCursor(insertPosition)
         smart.advance(cursorAdvancement)
         view.setCursorPosition(smart)
-# while ( cursor.column() > 0 && highlight()->isInWord( l->at( cursor.column() - 1 ), l->attribute( cursor.column() - 1 ) ) )
-          # cursor.setColumn(cursor.column() - 1);
-        # old = text( KTextEditor::Range(cursor, 1) );
 
 
 # kate: space-indent on;
