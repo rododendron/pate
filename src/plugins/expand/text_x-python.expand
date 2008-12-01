@@ -39,5 +39,16 @@ def _set_%(name)s(self, %(name)s):
 \t
 %(name)s = property(_get_%(name)s, _set_%(name)s)''' % {'name': name}
 
+
+def main():
+    return '''def main():
+\t\1
+
+if __name__ == '__main__':
+\tmain()
+'''
+
+
+
 # kate: space-indent on;
 
