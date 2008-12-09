@@ -225,7 +225,12 @@ def expandAtCursor():
     except UnicodeEncodeError:
         replacement = repr(replacement)
     #KateDocumentConfig::cfReplaceTabsDyn
-    replacement = replacement.replace('\n\t', '\n' + indentationCharacters(document))
+    indentCharacters = indentationCharacters(document)
+    # convert newlines followed by tab characters to whatever spacing
+    # the user... uses.
+    for i in xrange(100):
+        if '\n' + (indentCharacters * i) + '\t' in replacement:
+            replacement = replacement.replace('\n' + (indentCharacters * i) + '\t', '\n' + (indentCharacters * (i + 1)))
     insertPosition = word_range.start()
     line = unicode(document.line(insertPosition.line()))
     # autoindent: add the line's leading whitespace for each newline
