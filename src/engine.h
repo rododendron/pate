@@ -63,6 +63,7 @@ private:
     bool m_initialised;
     bool m_pluginsLoaded;
     PyObject *m_configuration;
+    PyThreadState *m_pythonThreadState;
 };
 
 

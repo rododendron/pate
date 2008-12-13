@@ -85,10 +85,13 @@ bool Pate::Engine::init() {
         return false;
     }
     m_initialised = true;
+    m_pythonThreadState = PyGILState_GetThisThreadState();
+    PyEval_ReleaseThread(m_pythonThreadState);
     return true;
 }
 
 void Pate::Engine::die() {
+    PyEval_AcquireThread(m_pythonThreadState);
     Py_Finalize();
     // unload the library from memory
     m_pythonLibrary->unload();
@@ -101,6 +104,8 @@ void Pate::Engine::loadPlugins() {
     if(m_pluginsLoaded)
         return;
     init();
+    PyGILState_STATE state = PyGILState_Ensure();
+
     PyObject *pate = PyImport_ImportModule(PATE_MODULE_NAME);
     PyObject *pateModuleDictionary = PyModule_GetDict(pate);
     // find plugins and load them.
@@ -116,6 +121,9 @@ void Pate::Engine::loadPlugins() {
         std::cerr << "Could not call " << PATE_MODULE_NAME << "._pluginsLoaded(). Dieing..\n";
         die();
     }
+    else {
+        PyGILState_Release(state);
+    }
 }
 
 void Pate::Engine::unloadPlugins() {
@@ -126,10 +134,13 @@ void Pate::Engine::unloadPlugins() {
     if(!m_pluginsLoaded)
         return;
     kDebug() << "unloading";
+    PyGILState_STATE state = PyGILState_Ensure();
+
     PyObject *dict = moduleDictionary();
     PyObject *func = PyDict_GetItemString(dict, "_pluginsUnloaded");
     if(!func) {
         kDebug() << "No " << PATE_MODULE_NAME << "._pluginsUnloaded set";
+        PyGILState_Release(state);
         return;
     }
     // Remove each plugin from sys.modules
@@ -147,6 +158,8 @@ void Pate::Engine::unloadPlugins() {
     m_pluginsLoaded = false;
     if(!Py::call(func))
         std::cerr << "Could not call " << PATE_MODULE_NAME << "._pluginsUnloaded().\n";
+    PyGILState_Release(state);
+
 }
 
 void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
@@ -202,7 +215,6 @@ PyObject *Pate::Engine::configuration() {
     return m_configuration;
 }
 PyObject *Pate::Engine::moduleDictionary() {
-    init();
     PyObject *pate = PyImport_ImportModule(PATE_MODULE_NAME);
     return PyModule_GetDict(pate);
 }
