@@ -115,7 +115,7 @@ def event(**attributes):
 
 @event(functions=set())
 def init(func):
-    ''' The function will be called when Pate has loaded completely: when all
+    ''' The function will be called when Kate has loaded completely: when all
     other enabled plugins have been loaded into memory, the configuration has
     been initiated, etc. '''
     init.functions.add(func)
@@ -174,8 +174,20 @@ documentManager = application.documentManager()
 
 def mainWindow():
     ''' The QWidget-derived main Kate window currently showing. A
-    shortcut around kate.application.activeMainWindow().window() '''
+    shortcut around kate.application.activeMainWindow().window().
+    
+    The Kate API differentiates between the interface main window and
+    the actual widget main window. If you need to access the
+    Kate.MainWindow for the methods it provides (e.g createToolView),
+    then use the mainInterfaceWindow function '''
     return application.activeMainWindow().window()
+
+def mainInterfaceWindow():
+    ''' The interface to the main window currently showing. Calling
+    window() on the interface window gives you the actual
+    QWidget-derived main window, which is what the mainWindow()
+    function returns '''
+    return application.activeMainWindow()
 
 def activeView():
     ''' The currently active view. Access its KTextEditor.Document
@@ -186,6 +198,17 @@ def activeView():
 def activeDocument():
     ''' The document for the currently active view '''
     return activeView().document()
+
+def centralWidget():
+    ''' The central widget that holds the tab bar and the editor.
+    This is a shortcut for kate.application.activeMainWindow().centralWidget() '''
+    return application.activeMainWindow().centralWidget()
+
+def focusEditor():
+    ''' Give the editing section focus '''
+    print 'dumping tree....'
+    for x in mainWindow().findChildren(QtGui.QWidget):
+        print x.__class__.__name__, x.objectName()
 
 def applicationDirectories(*path):
     path = os.path.join('pate', *path)
@@ -242,6 +265,7 @@ def pateInit():
         for func in init.functions:
             func()
     QtCore.QTimer.singleShot(0, _initPhase2)
+
 # called by pate on initialisation
 pate._pluginsLoaded = pateInit
 del pateInit
