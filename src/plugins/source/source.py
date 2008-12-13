@@ -2,6 +2,12 @@
 ''' Pluggable sidebar widget that shows the structure of the source 
 file currently being edited '''
 
+import functools
+import random
+import time
+import threading
+import sys
+
 import kate
 from kate import Kate # Kate library API
 
@@ -10,13 +16,43 @@ from PyQt4.QtGui import *
 from PyKDE4.kdeui import KIcon
 from PyKDE4.ktexteditor import KTextEditor # KTE namespace
 
+# time between updates in milliseconds
+updateInterval = 2500
 
-def verticalGradient(top, bottom):
-    g = QLinearGradient(0, 0, 0, SourceList.ItemHeight)
-    # g.setCoordinateMode(QGradient.StretchToDeviceMode)
-    g.setColorAt(0, QColor(top))
-    g.setColorAt(1, QColor(bottom))
-    return QBrush(g)
+
+
+
+mimeTypeToAnalyser = {}
+def register(*mimeTypes):
+    ''' Register a source analyser for a the given
+    mimetype(s). Periodically the function will be called in a
+    separate thread and fed a string containing the contents of a file
+    of registered mime. The function must return a list of 
+    StructureItem subclasses as appropriate to describe the file's
+    structure. See source_python.py for an example.
+    
+    Behaviour is undefined if more than one plugin registers
+    for the same mimetype '''
+    def inner(func):
+        for mimeType in mimeTypes:
+            mimeTypeToAnalyser[mimeType] = func
+        return func
+    return inner
+
+
+@kate._attribute(cache={})
+def gradientImageWithLine(fromColor, toColor, penColor=210):
+    if (fromColor, toColor, penColor) not in gradientImageWithLine.cache:
+        brush = verticalGradient(fromColor, toColor)
+        # and draw a thin line
+        i = QImage(1, SourceList.ItemHeight, QImage.Format_RGB32)
+        p = QPainter(i)
+        p.fillRect(i.rect(), brush)
+        p.setPen(QPen(QColor(penColor, penColor, penColor)))
+        p.drawLine(0, SourceList.ItemHeight - 1, 1, SourceList.ItemHeight - 1)
+        p.end()
+        gradientImageWithLine.cache[fromColor, toColor, penColor] = i
+    return gradientImageWithLine.cache[fromColor, toColor, penColor]
 
 
 class StructureItem(QListWidgetItem):
@@ -24,33 +60,26 @@ class StructureItem(QListWidgetItem):
     a function, etc. Each of these has a line (on which their definition
     begins), a name, and a brush to fill the background with, but may
     have more information such as parameters. '''
-    def __init__(self, line, name, brush):
+    def __init__(self, line, name, backgroundImage):
         QListWidgetItem.__init__(self)
         self.line = line
         self.setText(name)
-        self.setBackground(brush)
+        self.backgroundImage = backgroundImage
         # brush.
         self.name = name.strip()
         self.setSizeHint(QSize(1000, SourceList.ItemHeight))
     
-    # helper
-    def brushHelper(self, brush, penColor=210):
-        if not hasattr(self.__class__, '_brush'):
-            # and draw a thin line
-            i = QImage(1, SourceList.ItemHeight, QImage.Format_RGB32)
-            p = QPainter(i)
-            p.fillRect(i.rect(), brush)
-            p.setPen(QPen(QColor(penColor, penColor, penColor)))
-            p.drawLine(0, SourceList.ItemHeight - 1, 1, SourceList.ItemHeight - 1)
-            p.end()
-            self.__class__._brush = QBrush(i)
-        return self.__class__._brush
+    def beforeAddedToListWidget(self):
+        # called before this is put on a listwidget
+        if not hasattr(self.__class__, 'BackgroundBrush'):
+            self.__class__.BackgroundBrush = QBrush(self.backgroundImage)
+        self.setBackground(self.__class__.BackgroundBrush)
 
 
 class GlobalVariable(StructureItem):
     def __init__(self, line, name):
         gradientBrush = verticalGradient('#ede0b2', '#f3eacd')
-        StructureItem.__init__(self, line, name, self.brushHelper(gradientBrush))
+        StructureItem.__init__(self, line, name, self._bg(gradientBrush))
 
 class Function(StructureItem):
     ''' A function or procedure. It is up to you what you give as the
@@ -58,21 +87,18 @@ class Function(StructureItem):
     in it depending on your language) '''
     brush = None
     def __init__(self, line, name):
-        gradientBrush = verticalGradient('#dbedaa', '#e7f3c7')
-        StructureItem.__init__(self, line, name, self.brushHelper(gradientBrush))
+        StructureItem.__init__(self, line, name, gradientImageWithLine('#dbedaa', '#e7f3c7'))
 
 class Class(StructureItem):
     def __init__(self, line, name):
-        gradientBrush = verticalGradient('#c4dbf1', '#c8dff6')
-        StructureItem.__init__(self, line, name, self.brushHelper(gradientBrush, penColor=190))
+        StructureItem.__init__(self, line, name, gradientImageWithLine('#c4dbf1', '#c8dff6', 190))
 
 class Method(StructureItem):
     ''' A method is a function member of a class. '''
     def __init__(self, line, name):
         ''' Pass the usual line and name as well as a reference
         to the class that it is a method of '''
-        gradientBrush = verticalGradient('#d3ebf9', '#e3f0f7')
-        StructureItem.__init__(self, line, '    %s' % name, self.brushHelper(gradientBrush))
+        StructureItem.__init__(self, line, '    %s' % name, gradientImageWithLine('#d3ebf9', '#e3f0f7'))
 
 class Property(StructureItem):
     ''' Properties are things on a class that always have a method
@@ -80,12 +106,11 @@ class Property(StructureItem):
     value, and sometimes a method for deleting or clearing the value.
     They are used as syntactic sugar in some programming languages or
     as additional meta information. '''
-    def __init__(self, line, name, getter, setter=None, deleter=None):
+    def __init__(self, line, name, getter=None, setter=None, deleter=None):
         # we override the widget for this list item
         # because we need ultimo power in our custom display,
         # so do nothing but store data now.
-        StructureItem.__init__(self, line)
-        self.name = name
+        StructureItem.__init__(self, line, '    %s' % name, gradientImageWithLine('#d3ebf9', '#e3f0f7'))
         self.getter = getter
         self.setter = setter
         self.deleter = deleter
@@ -127,11 +152,6 @@ class SourceList(QListWidget):
         self.setStyleSheet('QListView { show-decoration-selected: 1; } QListView::item:selected { color: white; background: #999 }')
         self.connect(self, SIGNAL('activated(const QModelIndex &)'), self.itemActivated)
     
-    def itemActivated(self, index):
-        line = self.item(index.row()).line
-        self.clearSelection()
-        self.emit(SIGNAL('itemOnLineSelected(int)'), line)
-    
     # def resizeEvent(self, e):
         # # move the fading-out bit to the right
         # viewport = self.viewport()
@@ -141,6 +161,11 @@ class SourceList(QListWidget):
         # self.fade.setFixedSize(QSize(fadeWidth, h))
         # self.fade.move(w - fadeWidth + self.frameWidth(), self.frameWidth())
     
+    def itemActivated(self, index):
+        line = self.item(index.row()).line
+        self.clearSelection()
+        self.emit(SIGNAL('itemOnLineSelected(int)'), line)
+    
     def setStructure(self, structure):
         ''' Set the source list structure. You do not need to call this or touch
         this class at all if you're merely writing a plugin for a language.
@@ -148,8 +173,22 @@ class SourceList(QListWidget):
         self.clear()
         self._structure = structure[:]
         for i, item in enumerate(structure):
+            item.beforeAddedToListWidget()
             self.addItem(item)
+
+
+
+class AnalyserThread(threading.Thread):
+    def __init__(self, mimeType, source):
+        threading.Thread.__init__(self)
+        self.mimeType = mimeType
+        self.source = source
+        self.finished = False
     
+    def run(self):
+        self.structure = mimeTypeToAnalyser[self.mimeType](self.source)
+        self.finished = True
+
 
 class SourceStructureWidget(QWidget):
     def __init__(self, parent=None):
@@ -159,6 +198,30 @@ class SourceStructureWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setMargin(0)
         layout.addWidget(self.sourceList)
+        self.analysisThread = None
+        self.analyseTimer = self.startTimer(updateInterval)
+    
+    def timerEvent(self, e=None):
+        # print 'timer'
+        if e is None or e.timerId() == self.analyseTimer:
+            # if there are any running threads, forget it
+            if self.analysisThread is not None:
+                if self.analysisThread.finished:
+                    print 'set structure'
+                    self.setStructure(self.analysisThread.structure)
+                else:
+                    print 'not finished'
+                    return
+            document = kate.activeDocument()
+            mimeType = str(document.mimeType())
+            source = unicode(document.text())
+            if mimeType in mimeTypeToAnalyser:
+                self.analysisThread = AnalyserThread(mimeType, source)
+                print 'started analyser'
+                self.analysisThread.start()
+            else:
+                print 'set structure empty'
+                self.setStructure([])
     
     def setStructure(self, structure):
         if structure is None:
@@ -176,8 +239,8 @@ class SourceStructureWidget(QWidget):
         # self.sourceList.clearFocus()
 
 
-# the singletoninstance that's used. This is added to the Kate sidebar
-# on init
+# the singleton instance of the structure widget that's used. This is
+# added to the Kate sidebar on init.
 sidebar = SourceStructureWidget()
 
 @kate.init
@@ -198,16 +261,29 @@ def attachSourceSidebar():
     # if you don't like it :(
     w.showToolView(tool)
     
-    Human = Class(30, 'Human')
-    sidebar.setStructure([
-        GlobalVariable(3, '__name__'),
-        GlobalVariable(4, '__author__'),
-        Function(6, 'print(string, end=\'\\n\')'),
-        Function(10, 'exit()'),
-        Human,
-        Method(31, '__init__(self)'),
-        Method(35, '__del__(self)'),
-        Method(38, 'setName(self, name)'),
-        Method(45, 'sayMyName(self)'),
-    ])
+    # Human = Class(30, 'Human')
+    # sidebar.setStructure([
+        # GlobalVariable(3, '__name__'),
+        # GlobalVariable(4, '__author__'),
+        # Function(6, 'print(string, end=\'\\n\')'),
+        # Function(10, 'exit()'),
+        # Human,
+        # Method(31, '__init__(self)'),
+        # Method(35, '__del__(self)'),
+        # Method(38, 'setName(self, name)'),
+        # Method(45, 'sayMyName(self)'),
+    # ])
+
+
+@kate.viewChanged
+def viewChanged():
+    print 'view changed'
+
+
+def verticalGradient(top, bottom):
+    g = QLinearGradient(0, 0, 0, SourceList.ItemHeight)
+    # g.setCoordinateMode(QGradient.StretchToDeviceMode)
+    g.setColorAt(0, QColor(top))
+    g.setColorAt(1, QColor(bottom))
+    return QBrush(g)
 
