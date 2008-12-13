@@ -101,7 +101,7 @@ globalConfiguration = pate.configuration
 configuration = Configuration(pate.configuration)
 
 
-def event(**attributes):
+def _attribute(**attributes):
     # utility decorator that we wrap events in. Simply initialises
     # attributes on the function object to make code nicer.
     def decorator(func):
@@ -113,7 +113,7 @@ def event(**attributes):
 
 # Decorator event listeners
 
-@event(functions=set())
+@_attribute(functions=set())
 def init(func):
     ''' The function will be called when Kate has loaded completely: when all
     other enabled plugins have been loaded into memory, the configuration has
@@ -121,7 +121,21 @@ def init(func):
     init.functions.add(func)
     return func
 
-@event(actions=set())
+@_attribute(functions=set())
+def viewChanged(func):
+    ''' Calls the function when the view changes. To access the new active view,
+    use kate.activeView() '''
+    viewChanged.functions.add(func)
+    return func
+
+@_attribute(functions=set())
+def viewCreated(func):
+    ''' Calls the function when a new view is created, passing the view as a
+    parameter '''
+    viewCreated.functions.add(func)
+    return func
+
+@_attribute(actions=set())
 def action(text, icon=None, shortcut=None, menu=None):
     ''' Decorator that adds an action to the menu bar. When the item is fired,
     your function is called. Optional shortcuts, menu to place the action in,
@@ -163,6 +177,7 @@ def action(text, icon=None, shortcut=None, menu=None):
     return decorator
 
 # End decorators
+
 
 # API functions and objects
 
@@ -241,7 +256,8 @@ def pateInit():
         global initialized
         initialized = True
         # set up actions -- plug them into the window's action collection
-        window = application.activeMainWindow().window()
+        windowInterface = application.activeMainWindow()
+        window = windowInterface.window()
         nameToMenu = {} # e.g "help": KMenu
         for menu in window.findChildren(QtGui.QMenu):
             name = str(menu.objectName())
@@ -261,7 +277,8 @@ def pateInit():
                     menu = QtGui.QMenu(a.menu)
                     nameToMenu[menuName] = window.menuBar().insertMenu(before, menu)
                 nameToMenu[menuName].addAction(a)
-        # window.actionCollection().
+        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), functools.partial(_callAll, viewChanged.functions))
+        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), functools.partial(_callAll, viewCreated.functions))
         for func in init.functions:
             func()
     QtCore.QTimer.singleShot(0, _initPhase2)
@@ -273,7 +290,6 @@ del pateInit
 def pateDie():
     # Unload actions or things will crash
     global plugins, pluginDirectories
-    print 'pate die'
     for a in action.actions:
         for w in a.associatedWidgets():
             w.removeAction(a)
@@ -286,3 +302,8 @@ def pateDie():
         
 pate._pluginsUnloaded = pateDie
 del pateDie
+
+
+def _callAll(l):
+    for f in l:
+        f()
