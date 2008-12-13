@@ -39,6 +39,7 @@ Pate::Plugin::Plugin(QObject *parent, const QStringList &) : Kate::Plugin((Kate:
 Pate::Plugin::~Plugin() {
     Pate::Engine *p = Pate::Engine::self();
     p->unloadPlugins();
+    p->die();
     kDebug() << "Plugin deleted";
 }
 
@@ -57,11 +58,16 @@ Kate::PluginView *Pate::Plugin::createView(Kate::MainWindow *window) {
 void Pate::Plugin::readSessionConfig(KConfigBase *config, const QString &) {
     if(!Pate::Engine::self()->isInitialised())
         return;
+    PyGILState_STATE state = PyGILState_Ensure();
+
     PyObject *d = Pate::Engine::self()->moduleDictionary();
     kDebug() << "setting configuration";
     PyDict_SetItemString(d, "sessionConfiguration", Pate::Engine::self()->wrap((void *) config, "PyKDE4.kdecore.KConfigBase"));
-    if(!config->hasGroup("Pate"))
+    if(!config->hasGroup("Pate")) {
+        PyGILState_Release(state);
+
         return;
+    }
     // relatively safe evaluation environment for Pythonizing the serialised types:
     PyObject *evaluationLocals = PyDict_New();
     PyObject *evaluationGlobals = PyDict_New();
@@ -83,11 +89,15 @@ void Pate::Plugin::readSessionConfig(KConfigBase *config, const QString &) {
     Py_DECREF(evaluationBuiltins);
     Py_DECREF(evaluationGlobals);
     Py_DECREF(evaluationLocals);
+    PyGILState_Release(state);
+
 }
 
 void Pate::Plugin::writeSessionConfig(KConfigBase *config, const QString &) {
     // write session config data
     KConfigGroup group(config, "Pate");
+    PyGILState_STATE state = PyGILState_Ensure();
+
     PyObject *key, *value;
     Py_ssize_t position = 0;
     while(PyDict_Next(Pate::Engine::self()->configuration(), &position, &key, &value)) {
@@ -102,6 +112,8 @@ void Pate::Plugin::writeSessionConfig(KConfigBase *config, const QString &) {
         group.writeEntry(keyString, valueString);
         Py_DECREF(pyRepresentation);
     }
+    PyGILState_Release(state);
+
 }
 
 
