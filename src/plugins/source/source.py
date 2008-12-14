@@ -16,8 +16,10 @@ from PyQt4.QtGui import *
 from PyKDE4.kdeui import KIcon
 from PyKDE4.ktexteditor import KTextEditor # KTE namespace
 
-# time between updates in milliseconds
-updateInterval = 5000
+# time between updates in milliseconds. Note that this doesn't just
+# mean that it polls every n milliseconds, but that when you're
+# typing it'll wait at least this amount before each call to update
+updateInterval = 1000
 
 
 
@@ -78,8 +80,7 @@ class StructureItem(QListWidgetItem):
 
 class GlobalVariable(StructureItem):
     def __init__(self, line, name):
-        gradientBrush = verticalGradient('#ede0b2', '#f3eacd')
-        StructureItem.__init__(self, line, name, self._bg(gradientBrush))
+        StructureItem.__init__(self, line, name, gradientImageWithLine('#ede0b2', '#f3eacd'))
 
 class Function(StructureItem):
     ''' A function or procedure. It is up to you what you give as the
@@ -170,8 +171,8 @@ class SourceList(QListWidget):
         ''' Set the source list structure. You do not need to call this or touch
         this class at all if you're merely writing a plugin for a language.
         The format of "structure" is a list of StructureItem subclasses '''
-        self.clear()
         self._structure = structure[:]
+        self.clear()
         for i, item in enumerate(structure):
             item.beforeAddedToListWidget()
             self.addItem(item)
@@ -201,9 +202,11 @@ class AnalyserThread(QThread):
     def analyse(self, mimeType, source):
         ''' Start analysing the source to produce the structure.
         When it has been parsed, an 'analysed' signal is emitted.
-        The thread must have started running before this function is
-        called.
+        You must have called start() on this thread before calling
+        this.
         n.b. this function is fully thread-safe '''
+        while not hasattr(self, 'o'):
+            time.sleep(0.1)
         self.analysing = True
         event = AnalyseEvent(mimeType, source)
         QCoreApplication.postEvent(self.o, event)
@@ -216,9 +219,9 @@ class AnalyserThread(QThread):
         # self.finished = True
     
     def customEventInThread(self, e):
-        print QThread.currentThreadId()
         if e.type() != AnalyseEvent.Type:
             return
+        print QThread.currentThreadId(), 'analysing....'
         structure = mimeTypeToAnalyser[e.mimeType](e.source)
         self.analysing = False
         self.emit(SIGNAL('analysed'), structure)
@@ -233,26 +236,85 @@ class SourceStructureWidget(QWidget):
         layout.setMargin(0)
         layout.addWidget(self.sourceList)
         self.analyser = AnalyserThread()
-        self.connect(self.analyser, SIGNAL('started()'), self.startAnalysing, Qt.QueuedConnection)
-        self.connect(self.analyser, SIGNAL('analysed'), self.setStructure, Qt.QueuedConnection)
+        self.connect(self.analyser, SIGNAL('analysed'), self.structureUpdated, Qt.QueuedConnection)
         self.analyser.start()
+        self.analysisTimer = QTimer()
+        self.connect(self.analysisTimer, SIGNAL('timeout()'), self.analyse)
+        self.analysisTimer.setInterval(updateInterval)
+        self.analysisTimer.setSingleShot(True)
+        self.documentsBeingAnalysed = set()
+        self.lastView = None
+        self.dirty = True
+        # kickstart
+        QTimer.singleShot(0, self.viewChanged)
+        # listen for view changes
     
-    def startAnalysing(self):
-        while not hasattr(self.analyser, 'o'):
-            time.sleep(0.1)
-        self.analyseTimer = self.startTimer(updateInterval)
-        self.timerEvent()
+    def viewChanged(self):
+        if self.lastView is not None:
+            doc = self.lastView.document()
+            self.disconnect(doc, SIGNAL('textChanged(KTextEditor::Document*)'), self.textChanged)
+        self.lastView = kate.activeView()
+        doc = self.lastView.document()
+        # we can't just not listen for text changes to documents whose mimetype
+        # we don't like now, because the mime may change. 
+        # XX There's no concise signal for 'mime changed', but maybe something
+        # else can be done.
+        self.connect(doc, SIGNAL('textChanged(KTextEditor::Document*)'), self.textChanged, Qt.QueuedConnection)
+        self.dirty = True
+        self.textChanged(None, immediate=True)
     
-    def timerEvent(self, e=None):
-        # print 'timer'
-        if e is not None and e.timerId() != self.analyseTimer:
+    def textChanged(self, document, immediate=False):
+        # don't analyse for a document whose mimetype we know nothing about..
+        if str(kate.activeDocument().mimeType()) not in mimeTypeToAnalyser:
+            # XX hide the source list?
+            self.sourceList.setStructure([])
             return
-        if self.analyser.analysing:
+        self.dirty = True
+        if immediate:
+            self.analysisTimer.stop()
+            self.analyse()
+        elif self.analysisTimer.isActive():
             return
-        document = kate.activeDocument()
+        elif self.analyser.analysing:
+            self.analyse()
+        else:
+            self.analysisTimer.start()
+        # self.analysisTimer
+        # print 'view change'
+    
+    def analyse(self):
+        print QThread.currentThreadId(), 'analyse'
+        document = self.lastView.document()
+        self.documentsBeingAnalysed.add(document)
         mimeType = str(document.mimeType())
         source = unicode(document.text())
+        self.dirty = False
         self.analyser.analyse(mimeType, source)
+    
+    def structureUpdated(self, _structure):
+        global structure
+        structure = _structure
+        # print QThread.currentThreadId(), 'structure updated'
+        # make sure there hasn't been a switch of document in between
+        self.documentsBeingAnalysed.remove(kate.activeDocument())
+        if self.documentsBeingAnalysed:
+            return
+        if _structure is None:
+            pass
+        else:
+            self.sourceList.setStructure(_structure)
+        
+    
+    # def timerEvent(self, e=None):
+        # # print 'timer'
+        # if e is not None and e.timerId() != self.analyseTimer:
+            # return
+        # if self.analyser.analysing:
+            # return
+        # document = kate.activeDocument()
+        # mimeType = str(document.mimeType())
+        # source = unicode(document.text())
+        # self.analyser.analyse(mimeType, source)
         
         # # if there are any running threads, forget it
         # if self.analysisThread is not None:
@@ -273,12 +335,6 @@ class SourceStructureWidget(QWidget):
             # print 'set structure empty'
             # self.setStructure([])
     
-    def setStructure(self, structure):
-        if structure is None:
-            pass
-        else:
-            self.sourceList.setStructure(structure)
-    
     def goToLine(self, line):
         view = kate.activeView()
         cursor = view.cursorPosition()
@@ -287,11 +343,14 @@ class SourceStructureWidget(QWidget):
         kate.centralWidget().setFocus(Qt.OtherFocusReason)
         # self.sourceList.clearSelection()
         # self.sourceList.clearFocus()
-
+    
 
 # the singleton instance of the structure widget that's used. This is
 # added to the Kate sidebar on init.
 sidebar = SourceStructureWidget()
+# the structure of the webpage
+structure = []
+# kate.viewChanged()
 
 @kate.init
 def attachSourceSidebar():
@@ -327,7 +386,7 @@ def attachSourceSidebar():
 
 @kate.viewChanged
 def viewChanged():
-    print 'view changed'
+    sidebar.viewChanged()
 
 
 def verticalGradient(top, bottom):
