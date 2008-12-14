@@ -17,7 +17,7 @@ from PyKDE4.kdeui import KIcon
 from PyKDE4.ktexteditor import KTextEditor # KTE namespace
 
 # time between updates in milliseconds
-updateInterval = 2500
+updateInterval = 5000
 
 
 
@@ -177,17 +177,51 @@ class SourceList(QListWidget):
             self.addItem(item)
 
 
-
-class AnalyserThread(threading.Thread):
+class AnalyseEvent(QEvent):
+    Type = QEvent.User + 111
     def __init__(self, mimeType, source):
-        threading.Thread.__init__(self)
+        QEvent.__init__(self, QEvent.Type(self.Type))
         self.mimeType = mimeType
         self.source = source
-        self.finished = False
+
+
+class AnalyserThread(QThread):
+    ''' Asynchronously analyses a bit of source code and produce
+    a structure from it. To start analysing a bit of source,
+    pass its mime type and the code to the 'analyse' function.
+    When it has finished analysing, the thread will emit an
+    'analysed' signal, passing the structure (as a list of 
+    StructureItem subclasses).
+    To see whether source analysis is underway, check the value
+    of the analysing attribute '''
+    def __init__(self):
+        QThread.__init__(self)
+        self.analysing = False
+    
+    def analyse(self, mimeType, source):
+        ''' Start analysing the source to produce the structure.
+        When it has been parsed, an 'analysed' signal is emitted.
+        The thread must have started running before this function is
+        called.
+        n.b. this function is fully thread-safe '''
+        self.analysing = True
+        event = AnalyseEvent(mimeType, source)
+        QCoreApplication.postEvent(self.o, event)
     
     def run(self):
-        self.structure = mimeTypeToAnalyser[self.mimeType](self.source)
-        self.finished = True
+        self.o = QObject()
+        self.o.customEvent = self.customEventInThread
+        self.exec_()
+        # self.structure = mimeTypeToAnalyser[self.mimeType](self.source)
+        # self.finished = True
+    
+    def customEventInThread(self, e):
+        print QThread.currentThreadId()
+        if e.type() != AnalyseEvent.Type:
+            return
+        structure = mimeTypeToAnalyser[e.mimeType](e.source)
+        self.analysing = False
+        self.emit(SIGNAL('analysed'), structure)
 
 
 class SourceStructureWidget(QWidget):
@@ -198,30 +232,46 @@ class SourceStructureWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setMargin(0)
         layout.addWidget(self.sourceList)
-        self.analysisThread = None
+        self.analyser = AnalyserThread()
+        self.connect(self.analyser, SIGNAL('started()'), self.startAnalysing, Qt.QueuedConnection)
+        self.connect(self.analyser, SIGNAL('analysed'), self.setStructure, Qt.QueuedConnection)
+        self.analyser.start()
+    
+    def startAnalysing(self):
+        while not hasattr(self.analyser, 'o'):
+            time.sleep(0.1)
         self.analyseTimer = self.startTimer(updateInterval)
+        self.timerEvent()
     
     def timerEvent(self, e=None):
         # print 'timer'
-        if e is None or e.timerId() == self.analyseTimer:
-            # if there are any running threads, forget it
-            if self.analysisThread is not None:
-                if self.analysisThread.finished:
-                    print 'set structure'
-                    self.setStructure(self.analysisThread.structure)
-                else:
-                    print 'not finished'
-                    return
-            document = kate.activeDocument()
-            mimeType = str(document.mimeType())
-            source = unicode(document.text())
-            if mimeType in mimeTypeToAnalyser:
-                self.analysisThread = AnalyserThread(mimeType, source)
-                print 'started analyser'
-                self.analysisThread.start()
-            else:
-                print 'set structure empty'
-                self.setStructure([])
+        if e is not None and e.timerId() != self.analyseTimer:
+            return
+        if self.analyser.analysing:
+            return
+        document = kate.activeDocument()
+        mimeType = str(document.mimeType())
+        source = unicode(document.text())
+        self.analyser.analyse(mimeType, source)
+        
+        # # if there are any running threads, forget it
+        # if self.analysisThread is not None:
+            # if self.analysisThread.finished:
+                # print 'set structure'
+                # self.setStructure(self.analysisThread.structure)
+            # else:
+                # print 'not finished'
+                # return
+        # document = kate.activeDocument()
+        # mimeType = str(document.mimeType())
+        # source = unicode(document.text())
+        # if mimeType in mimeTypeToAnalyser:
+            # self.analysisThread = AnalyserThread(mimeType, source)
+            # print 'started analyser'
+            # self.analysisThread.start()
+        # else:
+            # print 'set structure empty'
+            # self.setStructure([])
     
     def setStructure(self, structure):
         if structure is None:
