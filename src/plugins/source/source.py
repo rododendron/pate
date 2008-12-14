@@ -138,6 +138,7 @@ class SourceList(QListWidget):
     def __init__(self, parent):
         QListWidget.__init__(self, parent)
         self._structure = []
+        self._unsupportedMimeType = None
         # disable eliding of the items so that we can add our fade
         self.setTextElideMode(Qt.ElideNone)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -171,11 +172,38 @@ class SourceList(QListWidget):
         ''' Set the source list structure. You do not need to call this or touch
         this class at all if you're merely writing a plugin for a language.
         The format of "structure" is a list of StructureItem subclasses '''
+        self._unsupportedMimeType = None
         self._structure = structure[:]
         self.clear()
         for i, item in enumerate(structure):
             item.beforeAddedToListWidget()
             self.addItem(item)
+    
+    def setUnsupportedMimeType(self, mimeType):
+        self._unsupportedMimeType = mimeType
+        # v = self.viewport()
+        self.clear()
+        self.update()
+    
+    def paintEvent(self, e):
+        QListWidget.paintEvent(self, e)
+        if self._unsupportedMimeType is not None:
+            rect = self.rect()
+            p = QPainter(self.viewport())
+            # f = p.font()
+            document = QTextDocument()
+            f = document.defaultFont()
+            f.setPixelSize(rect.width() / 12)
+            document.setDefaultFont(f)
+            textColor = self.palette().mid().color().dark(140).name()
+            document.setHtml('<font color="%s"><center>No analyser for<br/><font size="+2"><b>%s</b></font></center></font>' % (textColor, self._unsupportedMimeType))
+            rect.adjust(10, 10, -10, -10)
+            document.setTextWidth(rect.width() - 20)
+            textSize = document.size().toSize()
+            p.translate(rect.width() / 2 - textSize.width() / 2, rect.height() / 2 - textSize.height() / 2)
+            # textSize.translate
+            document.drawContents(p)
+            # actualRect = p.drawText(rect, Qt.AlignCenter | Qt.TextWordWrap, 'No analyser for mimetype\n%s' % self._unsupportedMimeType)
 
 
 class AnalyseEvent(QEvent):
@@ -221,7 +249,6 @@ class AnalyserThread(QThread):
     def customEventInThread(self, e):
         if e.type() != AnalyseEvent.Type:
             return
-        print QThread.currentThreadId(), 'analysing....'
         structure = mimeTypeToAnalyser[e.mimeType](e.source)
         self.analysing = False
         self.emit(SIGNAL('analysed'), structure)
@@ -247,7 +274,6 @@ class SourceStructureWidget(QWidget):
         self.dirty = True
         # kickstart
         QTimer.singleShot(0, self.viewChanged)
-        # listen for view changes
     
     def viewChanged(self):
         if self.lastView is not None:
@@ -265,9 +291,9 @@ class SourceStructureWidget(QWidget):
     
     def textChanged(self, document, immediate=False):
         # don't analyse for a document whose mimetype we know nothing about..
-        if str(kate.activeDocument().mimeType()) not in mimeTypeToAnalyser:
-            # XX hide the source list?
-            self.sourceList.setStructure([])
+        mimeType = str(kate.activeDocument().mimeType())
+        if mimeType not in mimeTypeToAnalyser:
+            self.sourceList.setUnsupportedMimeType(mimeType)
             return
         self.dirty = True
         if immediate:
@@ -283,7 +309,6 @@ class SourceStructureWidget(QWidget):
         # print 'view change'
     
     def analyse(self):
-        print QThread.currentThreadId(), 'analyse'
         document = self.lastView.document()
         self.documentsBeingAnalysed.add(document)
         mimeType = str(document.mimeType())
@@ -299,6 +324,7 @@ class SourceStructureWidget(QWidget):
         self.documentsBeingAnalysed.remove(kate.activeDocument())
         if self.documentsBeingAnalysed:
             return
+        
         if _structure is None:
             pass
         else:
