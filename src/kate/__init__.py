@@ -277,8 +277,8 @@ def pateInit():
                     menu = QtGui.QMenu(a.menu)
                     nameToMenu[menuName] = window.menuBar().insertMenu(before, menu)
                 nameToMenu[menuName].addAction(a)
-        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), functools.partial(_callAll, viewChanged.functions))
-        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), functools.partial(_callAll, viewCreated.functions))
+        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), functools.partial(_callAll, viewChanged.functions), QtCore.Qt.QueuedConnection)
+        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), functools.partial(_callAll, viewCreated.functions), QtCore.Qt.QueuedConnection)
         for func in init.functions:
             func()
     QtCore.QTimer.singleShot(0, _initPhase2)
