@@ -27,8 +27,9 @@ def analyse(s):
             structure.append(source.GlobalVariable(line, assignmentName.name))
         elif isinstance(node, compiler.ast.Function):
             name = node.name
-            # name = '%s(%s)' % (node.name, ', '.join(node.argnames))
-            structure.append(source.Function(node.lineno - 1, name))
+            f = source.Function(node.lineno - 1, name)
+            f.longName = '%s(%s)' % (node.name, ', '.join(node.argnames))
+            structure.append(f)
         elif isinstance(node, compiler.ast.Class):
             # XX list superclasses (node.bases)?
             name = node.name
@@ -38,8 +39,8 @@ def analyse(s):
             for classItem in classBlock.nodes:
                 if isinstance(classItem, compiler.ast.Function):
                     name = classItem.name
-                    # name = '%s(%s)' % (classItem.name, ', '.join(classItem.argnames))
                     method = source.Method(classItem.lineno - 1, name)
+                    method.longName = '%s.%s(%s)' % (node.name, classItem.name, ', '.join(classItem.argnames))
                     nameToMethod[classItem.name] = method
                     structure.append(method)
                 if isinstance(classItem, compiler.ast.Assign):

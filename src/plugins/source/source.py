@@ -13,7 +13,7 @@ from kate import Kate # Kate library API
 
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
-from PyKDE4.kdeui import KIcon
+from PyKDE4.kdeui import KIcon, KLineEdit
 from PyKDE4.ktexteditor import KTextEditor # KTE namespace
 
 # time between updates in milliseconds. Note that this doesn't just
@@ -69,7 +69,17 @@ class StructureItem(QListWidgetItem):
         self.backgroundImage = backgroundImage
         # brush.
         self.name = name.strip()
+        self._longName = None
         self.setSizeHint(QSize(1000, SourceList.ItemHeight))
+    
+    def _get_longName(self):
+        if self._longName is not None:
+            return self._longName
+        else:
+            return self.name
+    def _set_longName(self, longName):
+        self._longName = longName
+    longName = property(_get_longName, _set_longName)
     
     def beforeAddedToListWidget(self):
         # called before this is put on a listwidget
@@ -271,21 +281,25 @@ class SourceStructureWidget(QWidget):
         self.analysisTimer.setSingleShot(True)
         self.documentsBeingAnalysed = set()
         self.lastView = None
+        # can't rely on lastView.document() if the view gets closed, so
+        # we must remember the last document tooo
+        self.lastDocument = None
         self.dirty = True
         # kickstart
         QTimer.singleShot(0, self.viewChanged)
     
     def viewChanged(self):
-        if self.lastView is not None:
-            doc = self.lastView.document()
-            self.disconnect(doc, SIGNAL('textChanged(KTextEditor::Document*)'), self.textChanged)
+        if self.lastDocument is not None:
+            self.disconnect(self.lastDocument, SIGNAL('textChanged(KTextEditor::Document*)'), self.textChanged)
         self.lastView = kate.activeView()
-        doc = self.lastView.document()
+        if self.lastView is None:
+            return
+        self.lastDocument = self.lastView.document()
         # we can't just not listen for text changes to documents whose mimetype
         # we don't like now, because the mime may change. 
         # XX There's no concise signal for 'mime changed', but maybe something
         # else can be done.
-        self.connect(doc, SIGNAL('textChanged(KTextEditor::Document*)'), self.textChanged, Qt.QueuedConnection)
+        self.connect(self.lastDocument, SIGNAL('textChanged(KTextEditor::Document*)'), self.textChanged, Qt.QueuedConnection)
         self.dirty = True
         self.textChanged(None, immediate=True)
     
@@ -294,7 +308,12 @@ class SourceStructureWidget(QWidget):
         mimeType = str(kate.activeDocument().mimeType())
         if mimeType not in mimeTypeToAnalyser:
             self.sourceList.setUnsupportedMimeType(mimeType)
+            global structure
+            structure = None
+            # disable symbol jump
+            showSymbolFilter.action.setEnabled(False)
             return
+        showSymbolFilter.action.setEnabled(True)
         self.dirty = True
         if immediate:
             self.analysisTimer.stop()
@@ -317,6 +336,7 @@ class SourceStructureWidget(QWidget):
         self.analyser.analyse(mimeType, source)
     
     def structureUpdated(self, _structure):
+        # it's useful for other plugins to have access to this structure.
         global structure
         structure = _structure
         # print QThread.currentThreadId(), 'structure updated'
@@ -362,14 +382,148 @@ class SourceStructureWidget(QWidget):
             # self.setStructure([])
     
     def goToLine(self, line):
-        view = kate.activeView()
-        cursor = view.cursorPosition()
-        lineLength = len(unicode(view.document().line(line)))
-        view.setCursorPosition(KTextEditor.Cursor(line, lineLength))
-        kate.centralWidget().setFocus(Qt.OtherFocusReason)
-        # self.sourceList.clearSelection()
-        # self.sourceList.clearFocus()
+        goToLine(kate.activeView(), line)
+
+
+class WidgetScreen(QWidget):
+    ''' Screen the top level window '''
+    def __init__(self, parent, color=QColor(255, 255, 255, 150), child=None):
+        QWidget.__init__(self, parent)
+        setBackgroundColor(self, color)
+        self.child = child
+        layout = QVBoxLayout(self)
+        layout.setMargin(0)
+        if child is not None:
+            child.setParent(self)
+            layout.addWidget(child, 1, Qt.AlignHCenter)
+        self.resize(parent.size())
+        parent.installEventFilter(self)
     
+    def __del__(self):
+        self.parent().removeEventFilter(self)
+        if self.originallyFocused is not None:
+            self.originallyFocused.setFocus(Qt.OtherFocusReason)
+    
+    def mousePressEvent(self, e):
+        # clicking hides it
+        self.deleteLater()
+    
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape:
+            self.deleteLater()
+        else:
+            QWidget.keyPressEvent(self, e)
+    
+    def showEvent(self, e):
+        self.originallyFocused = QApplication.focusWidget()
+        if self.child is not None:
+            self.child.setFocus(Qt.OtherFocusReason)
+        else:
+            self.setFocus(Qt.OtherFocusReason)
+    
+    def eventFilter(self, o, e):
+        if e.type() == QEvent.Resize:
+            self.resize(e.size())
+            print self.child.size()
+        return QWidget.eventFilter(self, o, e)
+
+
+class SearchPanel(QWidget):
+    shadowColor = QColor(150, 150, 150, 200)
+    shadowWidth = 7
+    def __init__(self, parent, view, structure):
+        QWidget.__init__(self, parent)
+        self.view = view
+        self.structure = structure[:]
+        f = self.font()
+        fontSize = QFontInfo(f).pixelSize()
+        self.setFixedWidth(fontSize * 30)
+        layout = QHBoxLayout(self)
+        vbox = QVBoxLayout()
+        layout.addSpacing(10)
+        layout.addLayout(vbox, 1)
+        layout.addSpacing(10)
+        self.filterBox = KLineEdit(self)
+        self.connect(self.filterBox, SIGNAL('textChanged(const QString &)'), self.filterText)
+        self.connect(self.filterBox, SIGNAL('returnPressed()'), self.jumpToFirstItem)
+        self.filterBox.setClearButtonShown(True)
+        self.setFocusProxy(self.filterBox)
+        vbox.addWidget(self.filterBox, 0, Qt.AlignTop)
+        self.symbolList = QListWidget(self)
+        self.symbolList.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.connect(self.symbolList, SIGNAL('activated(const QModelIndex &)'), self.itemActivated)
+        vbox.addWidget(self.symbolList)
+        self.items = []
+        for item in self.structure:
+            x = QListWidgetItem(item.longName)
+            self.items.append(x)
+            self.symbolList.addItem(x)
+    
+    def keyPressEvent(self, e):
+        if self.items:
+            if e.key() == Qt.Key_Down:
+                self.symbolList.setCurrentItem(self.items[self.firstVisibleItem()])
+                self.symbolList.setFocus(Qt.OtherFocusReason)
+            elif e.key() == Qt.Key_Up:
+                self.symbolList.setCurrentItem(self.items[self.lastVisibleItem()])
+                self.symbolList.setFocus(Qt.OtherFocusReason)
+        QWidget.keyPressEvent(self, e)
+    
+    def filterText(self, t):
+        ''' case insensitive filtering of the list '''
+        t = unicode(t).lower()
+        # print self.structure
+        for i, item in enumerate(self.structure):
+            self.items[i].setHidden(t not in item.longName.lower())
+    
+    def jumpToFirstItem(self):
+        if self.structure:
+            goToLine(self.view, self.structure[self.firstVisibleItem()].line)
+            # close
+            self.parent().deleteLater()
+    
+    def itemActivated(self, index):
+        goToLine(self.view, self.structure[index.row()].line)
+        self.parent().deleteLater()
+    
+    def firstVisibleItem(self):
+        ''' The index of the first visible item in the symbol list '''
+        for i, item in enumerate(self.items):
+            if not item.isHidden():
+                return i
+    
+    def lastVisibleItem(self):
+        ''' The index of the last visible item in the symbol list '''
+        for i, item in enumerate(reversed(self.items)):
+            if not item.isHidden():
+                return len(self.items) - 1 - i
+        
+    
+    def paintEvent(self, e):
+        p = QPainter(self)
+        leftRect = QRect(0, 2, self.shadowWidth, self.height() - 2)
+        rightRect = QRect(self.width() - self.shadowWidth, 2, self.shadowWidth, self.height() - 2)
+        centerRect = QRect(leftRect.width(), leftRect.topLeft().y(), rightRect.topLeft().x() - leftRect.width(), leftRect.bottomLeft().y())
+        
+        shadowEndColor = QColor(self.shadowColor)
+        shadowEndColor.setAlpha(0)
+        
+        # print shadowEndColor.getRgb()
+        # print self.shadowColor.getRgb()
+        leftGradient = QLinearGradient(QPointF(leftRect.topLeft()), QPointF(leftRect.topRight()))
+        leftGradient.setColorAt(0, shadowEndColor)
+        leftGradient.setColorAt(1, self.shadowColor)
+        
+        # print rightRect.topLeft(), rightRect.topRight()
+        rightGradient = QLinearGradient(QPointF(rightRect.topLeft()), QPointF(rightRect.topRight()))
+        rightGradient.setColorAt(0, self.shadowColor)
+        rightGradient.setColorAt(1, shadowEndColor)
+        
+        p.fillRect(leftRect, QBrush(leftGradient))
+        p.fillRect(rightRect, QBrush(rightGradient))
+        p.fillRect(centerRect, QColor(240, 245, 255, 200))
+        
+
 
 # the singleton instance of the structure widget that's used. This is
 # added to the Kate sidebar on init.
@@ -395,7 +549,6 @@ def attachSourceSidebar():
     # so that your preference on its visibility isn't remembered. Disable the plugin
     # if you don't like it :(
     w.showToolView(tool)
-    
     # Human = Class(30, 'Human')
     # sidebar.setStructure([
         # GlobalVariable(3, '__name__'),
@@ -414,6 +567,14 @@ def attachSourceSidebar():
 def viewChanged():
     sidebar.viewChanged()
 
+@kate.action('Symbol Jump', icon='bookmarks-organize', shortcut='Ctrl+;', menu='View')
+def showSymbolFilter():
+    view = kate.activeView()
+    panel = SearchPanel(None, view, structure[:])
+    screen = WidgetScreen(view, child=panel)
+    screen.show()
+    # print 'hey'
+
 
 def verticalGradient(top, bottom):
     g = QLinearGradient(0, 0, 0, SourceList.ItemHeight)
@@ -422,3 +583,17 @@ def verticalGradient(top, bottom):
     g.setColorAt(1, QColor(bottom))
     return QBrush(g)
 
+def setBackgroundColor(widget, color):
+    ''' Utility function to set the background color of a QWidget '''
+    p = widget.palette()
+    p.setColor(QPalette.Active, QPalette.Window, color)
+    p.setColor(QPalette.Inactive, QPalette.Window, color)
+    widget.setPalette(p)
+    widget.setAutoFillBackground(True)
+    
+def goToLine(view, line):
+    ''' Moves the view's cursor to the end of the given line '''
+    cursor = view.cursorPosition()
+    lineLength = len(unicode(view.document().line(line)))
+    view.setCursorPosition(KTextEditor.Cursor(line, lineLength))
+    kate.centralWidget().setFocus(Qt.OtherFocusReason)
