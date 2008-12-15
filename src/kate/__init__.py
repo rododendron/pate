@@ -173,6 +173,7 @@ def action(text, icon=None, shortcut=None, menu=None):
         a.connect(a, QtCore.SIGNAL('triggered()'), func)
         # delay till everything has been initialised
         action.actions.add(a)
+        func.action = a
         return func
     return decorator
 
