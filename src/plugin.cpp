@@ -24,12 +24,13 @@ K_EXPORT_COMPONENT_FACTORY(pateplugin, KGenericFactory<Pate::Plugin>("pate"))
 
 /// Plugin view, instances of which are created once for each session
 Pate::PluginView::PluginView(Kate::MainWindow *window) : Kate::PluginView(window) {
+    kDebug() << "PluginView::PluginView\n";
 }
-
 
 Pate::Plugin::Plugin(QObject *parent, const QStringList &) : Kate::Plugin((Kate::Application*) parent) {
 //     std::cout << "Plugin::Plugin\n";
     // initialise the Python engine
+    kDebug() << "Plugin::Plugin\n";
     if(!Pate::Engine::self()->init()) {
         std::cerr << TERMINAL_RED << "Could not initialise Pate. Ouch!\n" << TERMINAL_CLEAR;
     }

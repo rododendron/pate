@@ -91,13 +91,15 @@ bool Pate::Engine::init() {
 }
 
 void Pate::Engine::die() {
+    kDebug() << "dieing......\n";
     PyEval_AcquireThread(m_pythonThreadState);
     Py_Finalize();
     // unload the library from memory
-    m_pythonLibrary->unload();
+    kDebug() << m_pythonLibrary->unload();
     m_pythonLibrary = 0;
     m_pluginsLoaded = false;
     m_initialised = false;
+    kDebug() << "DEAD\n";
 }
 
 void Pate::Engine::loadPlugins() {

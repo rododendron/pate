@@ -122,6 +122,14 @@ def init(func):
     return func
 
 @_attribute(functions=set())
+def unload(func):
+    ''' The function will be called when Pate is being unloaded from memory.
+    Clean up any widgets that you have added to the interface (toolviews
+    etc). '''
+    unload.functions.add(func)
+    return func
+
+@_attribute(functions=set())
 def viewChanged(func):
     ''' Calls the function when the view changes. To access the new active view,
     use kate.activeView() '''
@@ -294,9 +302,8 @@ def pateDie():
     for a in action.actions:
         for w in a.associatedWidgets():
             w.removeAction(a)
-            # print 'removed %s from %s' % (a, w)
-    
     # clear up
+    _callAll(unload.functions)
     action.actions = set()
     init.functions = set()
     plugins = pluginDirectories = None
@@ -307,4 +314,8 @@ del pateDie
 
 def _callAll(l):
     for f in l:
-        f()
+        try:
+            f()
+        except:
+            print 'exception'
+            continue

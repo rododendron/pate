@@ -562,6 +562,13 @@ def attachSourceSidebar():
         # Method(45, 'sayMyName(self)'),
     # ])
 
+@kate.unload
+def removeSidebar():
+    print 'cleaning up....'
+    global sidebar
+    sidebar.setParent(None)
+    sidebar = None
+
 
 @kate.viewChanged
 def viewChanged():
