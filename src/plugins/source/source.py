@@ -564,9 +564,9 @@ def attachSourceSidebar():
 
 @kate.unload
 def removeSidebar():
-    print 'cleaning up....'
     global sidebar
-    sidebar.setParent(None)
+    if kate.objectIsAlive(sidebar):
+        sidebar.setParent(None)
     sidebar = None
 
 

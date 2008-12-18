@@ -203,6 +203,7 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
                 PyObject *plugin = PyImport_ImportModule(PQ(pluginName));
                 if(plugin) {
                     PyList_Append(plugins, plugin);
+                    Py_DECREF(plugin);
                 }
                 else {
                     Py::traceback(QString("Could not load plugin %1").arg(pluginName));

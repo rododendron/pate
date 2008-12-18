@@ -40,7 +40,7 @@ Pate::Plugin::Plugin(QObject *parent, const QStringList &) : Kate::Plugin((Kate:
 Pate::Plugin::~Plugin() {
     Pate::Engine *p = Pate::Engine::self();
     p->unloadPlugins();
-    p->die();
+//     p->die();
     kDebug() << "Plugin deleted";
 }
 

@@ -3,6 +3,7 @@
 
 import sys
 import os
+import traceback
 import functools
 
 import pate
@@ -17,6 +18,7 @@ plugins = None
 pluginDirectories = None
 
 initialized = False
+
 
 # Plugin API
 
@@ -101,6 +103,15 @@ globalConfiguration = pate.configuration
 configuration = Configuration(pate.configuration)
 
 
+def _callAll(l, *args, **kwargs):
+    for f in l:
+        try:
+            f(*args, **kwargs)
+        except:
+            traceback.print_exc()
+            sys.stderr.write('\n')
+            continue
+
 def _attribute(**attributes):
     # utility decorator that we wrap events in. Simply initialises
     # attributes on the function object to make code nicer.
@@ -110,10 +121,17 @@ def _attribute(**attributes):
         return func
     return decorator
 
+def _simpleEventListener(func):
+    # automates the most common decorator pattern: calling a bunch
+    # of functions when an event has occured
+    func.functions = set()
+    func.fire = functools.partial(_callAll, func.functions)
+    func.clear = func.functions.clear
+    return func
 
 # Decorator event listeners
 
-@_attribute(functions=set())
+@_simpleEventListener
 def init(func):
     ''' The function will be called when Kate has loaded completely: when all
     other enabled plugins have been loaded into memory, the configuration has
@@ -121,7 +139,7 @@ def init(func):
     init.functions.add(func)
     return func
 
-@_attribute(functions=set())
+@_simpleEventListener
 def unload(func):
     ''' The function will be called when Pate is being unloaded from memory.
     Clean up any widgets that you have added to the interface (toolviews
@@ -129,14 +147,14 @@ def unload(func):
     unload.functions.add(func)
     return func
 
-@_attribute(functions=set())
+@_simpleEventListener
 def viewChanged(func):
     ''' Calls the function when the view changes. To access the new active view,
     use kate.activeView() '''
     viewChanged.functions.add(func)
     return func
 
-@_attribute(functions=set())
+@_simpleEventListener
 def viewCreated(func):
     ''' Calls the function when a new view is created, passing the view as a
     parameter '''
@@ -239,7 +257,7 @@ def applicationDirectories(*path):
     return map(unicode, kdecore.KGlobal.dirs().findDirs("appdata", path))
 
 def sessionConfiguration():
-    if plugins:
+    if plugins is not None:
         return pate.sessionConfiguration
 
 def popup(*message, **kwargs):
@@ -252,6 +270,16 @@ def popup(*message, **kwargs):
     # TODO implement me
     sys.stdout.write(' '.join(map(unicode, message)) + '\n')
 
+
+def objectIsAlive(obj):
+    ''' Test whether an object is alive; that is, whether the pointer
+    to the object still exists. '''
+    import sip
+    try:
+       sip.unwrapinstance(obj)
+    except RuntimeError:
+       return False
+    return True
 
 
 # Initialisation
@@ -286,10 +314,9 @@ def pateInit():
                     menu = QtGui.QMenu(a.menu)
                     nameToMenu[menuName] = window.menuBar().insertMenu(before, menu)
                 nameToMenu[menuName].addAction(a)
-        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), functools.partial(_callAll, viewChanged.functions), QtCore.Qt.QueuedConnection)
-        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), functools.partial(_callAll, viewCreated.functions), QtCore.Qt.QueuedConnection)
-        for func in init.functions:
-            func()
+        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire, QtCore.Qt.QueuedConnection)
+        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire, QtCore.Qt.QueuedConnection)
+        _callAll(init.functions)
     QtCore.QTimer.singleShot(0, _initPhase2)
 
 # called by pate on initialisation
@@ -303,19 +330,19 @@ def pateDie():
         for w in a.associatedWidgets():
             w.removeAction(a)
     # clear up
-    _callAll(unload.functions)
-    action.actions = set()
-    init.functions = set()
+    unload.fire()
+    
+    action.actions.clear()
+    init.clear()
+    unload.clear()
+    viewChanged.clear()
+    viewCreated.clear()
     plugins = pluginDirectories = None
-        
+    # disconnect signals
+    windowInterface = application.activeMainWindow()
+    if windowInterface is not None:
+        windowInterface.disconnect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire)
+        windowInterface.disconnect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire)
+    
 pate._pluginsUnloaded = pateDie
 del pateDie
-
-
-def _callAll(l):
-    for f in l:
-        try:
-            f()
-        except:
-            print 'exception'
-            continue
