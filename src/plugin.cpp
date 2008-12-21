@@ -20,6 +20,7 @@
 #include <iostream>
 
 
+
 K_EXPORT_COMPONENT_FACTORY(pateplugin, KGenericFactory<Pate::Plugin>("pate"))
 
 /// Plugin view, instances of which are created once for each session
@@ -39,8 +40,10 @@ Pate::Plugin::Plugin(QObject *parent, const QStringList &) : Kate::Plugin((Kate:
 
 Pate::Plugin::~Plugin() {
     Pate::Engine *p = Pate::Engine::self();
+#ifdef PATE_UNLOAD
     p->unloadPlugins();
-//     p->die();
+    p->die();
+#endif
     kDebug() << "Plugin deleted";
 }
 
