@@ -341,9 +341,11 @@ class SourceStructureWidget(QWidget):
         structure = _structure
         # print QThread.currentThreadId(), 'structure updated'
         # make sure there hasn't been a switch of document in between
-        self.documentsBeingAnalysed.remove(kate.activeDocument())
-        if self.documentsBeingAnalysed:
-            return
+        activeDocument = kate.activeDocument()
+        if activeDocument in self.documentsBeingAnalysed:
+            self.documentsBeingAnalysed.remove(activeDocument)
+            if self.documentsBeingAnalysed:
+                return
         
         if _structure is None:
             pass

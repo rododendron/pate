@@ -19,7 +19,7 @@ def analyse(s):
     topLevel = ast.node
     structure = []
     for node in topLevel.nodes:
-        if isinstance(node, compiler.ast.Assign):
+        if isinstance(node, compiler.ast.Assign) and len(node.getChildren()) == 2:
             assignmentName, assignmentValue = node.getChildren()
             if not isinstance(assignmentName, compiler.ast.AssName):
                 continue
