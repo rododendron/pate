@@ -45,9 +45,9 @@ class Configuration:
     
     def __setitem__(self, key, value):
         plugin = sys._getframe(1).f_globals['__name__']
-        if plugin not in self.root.configuration:
+        if plugin not in self.root:
             self.root[plugin] = {}
-        self.root.configuration[plugin][key] = value
+        self.root[plugin][key] = value
     
     def __delitem__(self, key):
         plugin = sys._getframe(1).f_globals['__name__']
@@ -70,7 +70,8 @@ class Configuration:
         return str(self.root.get(plugin, {}))
         
     def __repr__(self):
-        return str(self)
+        plugin = sys._getframe(1).f_globals['__name__']
+        return repr(self.root.get(plugin, {}))
     
     def keys(self):
         plugin = sys._getframe(1).f_globals['__name__']
@@ -95,6 +96,12 @@ class Configuration:
         value = self[key]
         del self[key]
         return value
+    
+    def save(self):
+        pate.saveConfiguration()
+    
+    def _name(self):
+        return sys._getframe(1).f_globals['__name__']
 
 # a configuration shared by all plugins. This can also be used to
 # access plugin-specific configurations

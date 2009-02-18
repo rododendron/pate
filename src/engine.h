@@ -43,6 +43,11 @@ public:
     /// automatically by the destructor, so you shouldn't need it yourself
     void die();
     
+    /// Write out the configuration dictionary to disk
+    void saveConfiguration();
+    /// (re)Load the configuration into memory from disk
+    void reloadConfiguration();
+    
     void loadPlugins();
     void unloadPlugins();
 

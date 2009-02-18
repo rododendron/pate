@@ -228,7 +228,8 @@ class KateConsole(QtGui.QTextEdit):
             'Kate': kate.Kate,
             'exit': exit,
             'quit': exit,
-            'help': Helper(self)
+            'help': Helper(self),
+            '__name__': __name__,
         }
         self.console = Console(builtins)
         self.console.write = self.displayResult

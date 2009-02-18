@@ -8,6 +8,7 @@
 #include <QFileInfo>
 
 #include <kglobal.h>
+#include <kconfig.h>
 #include <kstandarddirs.h>
 #include <kdebug.h>
 #include <kate/application.h>
@@ -24,8 +25,15 @@
 #define PATE_MODULE_NAME "pate" 
 
 
+static PyObject *pate_saveConfiguration(PyObject *self) {
+    if(Pate::Engine::self()->isInitialised())
+        Pate::Engine::self()->saveConfiguration();
+    Py_INCREF(Py_None);
+    return Py_None;
+}
 
 static PyMethodDef pateMethods[] = {
+    {"saveConfiguration", (PyCFunction) pate_saveConfiguration, METH_NOARGS, NULL},
     {NULL, NULL, 0, NULL}
 };
 
@@ -36,12 +44,16 @@ Pate::Engine::Engine(QObject *parent) : QObject(parent) {
     m_pythonLibrary = 0;
     m_pluginsLoaded = false;
     m_configuration = PyDict_New();
+    reloadConfiguration();
 }
 
 Pate::Engine::~Engine() {
     // shut the interpreter down if it has been started
-    Py_DECREF(m_configuration);
-    m_configuration = 0;
+    if(m_configuration) {
+        saveConfiguration();
+        Py_DECREF(m_configuration);
+        m_configuration = 0;
+    }
     if(m_initialised) {
         die();
     }
@@ -85,9 +97,25 @@ bool Pate::Engine::init() {
         return false;
     }
     m_initialised = true;
+    reloadConfiguration();
     m_pythonThreadState = PyGILState_GetThisThreadState();
     PyEval_ReleaseThread(m_pythonThreadState);
     return true;
+}
+
+void Pate::Engine::saveConfiguration() {
+    if(!m_configuration || !m_initialised)
+        return;
+    KConfig config("paterc", KConfig::SimpleConfig);
+    Py::updateConfigurationFromDictionary(&config, m_configuration);
+    config.sync();
+}
+void Pate::Engine::reloadConfiguration() {
+    if(!m_initialised)
+        return;
+    PyDict_Clear(m_configuration);
+    KConfig config("paterc", KConfig::SimpleConfig);
+    Py::updateDictionaryFromConfiguration(m_configuration, &config);
 }
 
 void Pate::Engine::die() {

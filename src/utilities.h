@@ -7,6 +7,7 @@
 #include "Python.h"
 
 class QString;
+class KConfigBase;
 
 
 // terminal colours
@@ -18,16 +19,27 @@ class QString;
 
 namespace Pate { namespace Py {
 
-// Convert a QString to a Python unicode object
+/// Convert a QString to a Python unicode object
 PyObject *unicode(const QString &string);
-// Call a function, displaying a traceback in STDERR if it fails
+
+/// Call a function, displaying a traceback in STDERR if it fails
 bool call(PyObject *function, PyObject *arguments);
 bool call(PyObject *function);
-// Append a QString to a list as a Python unicode object
+
+/// Append a QString to a list as a Python unicode object
 void appendStringToList(PyObject *list, const QString &value);
-// Print a Python traceback to standard error when an error has occured,
-// giving a high-level description of what happened
+
+/// Print a Python traceback to standard error when an error has occured,
+/// giving a high-level description of what happened
 void traceback(const QString &description);
+
+/// Create a Python dictionary from a KConfigBase instance, 
+/// writing the string representation of the values
+void updateDictionaryFromConfiguration(PyObject *dictionary, KConfigBase *config);
+
+/// Write a Python dictionary to a configuration object, converting
+/// objects to their string representation along the way
+void updateConfigurationFromDictionary(KConfigBase *config, PyObject *dictionary);
 
 }} // namespace Py, namespace Pate
 

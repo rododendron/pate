@@ -60,63 +60,64 @@ Kate::PluginView *Pate::Plugin::createView(Kate::MainWindow *window) {
  * XX should probably pickle.
  */
 void Pate::Plugin::readSessionConfig(KConfigBase *config, const QString &) {
-    if(!Pate::Engine::self()->isInitialised())
-        return;
-    PyGILState_STATE state = PyGILState_Ensure();
-
-    PyObject *d = Pate::Engine::self()->moduleDictionary();
-    kDebug() << "setting configuration";
-    PyDict_SetItemString(d, "sessionConfiguration", Pate::Engine::self()->wrap((void *) config, "PyKDE4.kdecore.KConfigBase"));
-    if(!config->hasGroup("Pate")) {
-        PyGILState_Release(state);
-
-        return;
-    }
-    // relatively safe evaluation environment for Pythonizing the serialised types:
-    PyObject *evaluationLocals = PyDict_New();
-    PyObject *evaluationGlobals = PyDict_New();
-    PyObject *evaluationBuiltins = PyDict_New();
-    PyDict_SetItemString(evaluationGlobals, "__builtin__", evaluationBuiltins);
-    // read config values for our group, shoving the Python evaluated value into a dict
-    KConfigGroup group = config->group("Pate");
-    foreach(QString key, group.keyList()) {
-        QString valueString = group.readEntry(key);
-        PyObject *value = PyRun_String(PQ(group.readEntry(key)), Py_eval_input, evaluationLocals, evaluationGlobals);
-        if(value) {
-            PyObject *c = Pate::Engine::self()->configuration();
-            PyDict_SetItemString(c, PQ(key), value);
-        }
-        else {
-            Py::traceback(QString("Bad config value: %1").arg(valueString));
-        }
-    }
-    Py_DECREF(evaluationBuiltins);
-    Py_DECREF(evaluationGlobals);
-    Py_DECREF(evaluationLocals);
-    PyGILState_Release(state);
+//     if(!Pate::Engine::self()->isInitialised())
+//         return;
+//     PyGILState_STATE state = PyGILState_Ensure();
+// 
+//     PyObject *d = Pate::Engine::self()->moduleDictionary();
+//     kDebug() << "setting configuration";
+//     PyDict_SetItemString(d, "sessionConfiguration", Pate::Engine::self()->wrap((void *) config, "PyKDE4.kdecore.KConfigBase"));
+//     if(!config->hasGroup("Pate")) {
+//         PyGILState_Release(state);
+// 
+//         return;
+//     }
+//     // relatively safe evaluation environment for Pythonizing the serialised types:
+//     PyObject *evaluationLocals = PyDict_New();
+//     PyObject *evaluationGlobals = PyDict_New();
+//     PyObject *evaluationBuiltins = PyDict_New();
+//     PyDict_SetItemString(evaluationGlobals, "__builtin__", evaluationBuiltins);
+//     // read config values for our group, shoving the Python evaluated value into a dict
+//     KConfigGroup group = config->group("Pate");
+//     foreach(QString key, group.keyList()) {
+//         QString valueString = group.readEntry(key);
+//         PyObject *value = PyRun_String(PQ(group.readEntry(key)), Py_eval_input, evaluationLocals, evaluationGlobals);
+//         if(value) {
+//             PyObject *c = Pate::Engine::self()->configuration();
+//             PyDict_SetItemString(c, PQ(key), value);
+//         }
+//         else {
+//             Py::traceback(QString("Bad config value: %1").arg(valueString));
+//         }
+//     }
+//     Py_DECREF(evaluationBuiltins);
+//     Py_DECREF(evaluationGlobals);
+//     Py_DECREF(evaluationLocals);
+//     PyGILState_Release(state);
 
 }
 
 void Pate::Plugin::writeSessionConfig(KConfigBase *config, const QString &) {
-    // write session config data
-    KConfigGroup group(config, "Pate");
-    PyGILState_STATE state = PyGILState_Ensure();
-
-    PyObject *key, *value;
-    Py_ssize_t position = 0;
-    while(PyDict_Next(Pate::Engine::self()->configuration(), &position, &key, &value)) {
-        // ho ho
-        QString keyString = PyString_AsString(key);
-        PyObject *pyRepresentation = PyObject_Repr(value);
-        if(!pyRepresentation) {
-            Py::traceback(QString("Could not get the representation of the value for '%1'").arg(keyString));
-            continue;
-        }
-        QString valueString = PyString_AsString(pyRepresentation);
-        group.writeEntry(keyString, valueString);
-        Py_DECREF(pyRepresentation);
-    }
-    PyGILState_Release(state);
+//     // write session config data
+//     kDebug() << "write session config\n";
+//     KConfigGroup group(config, "Pate");
+//     PyGILState_STATE state = PyGILState_Ensure();
+// 
+//     PyObject *key, *value;
+//     Py_ssize_t position = 0;
+//     while(PyDict_Next(Pate::Engine::self()->configuration(), &position, &key, &value)) {
+//         // ho ho
+//         QString keyString = PyString_AsString(key);
+//         PyObject *pyRepresentation = PyObject_Repr(value);
+//         if(!pyRepresentation) {
+//             Py::traceback(QString("Could not get the representation of the value for '%1'").arg(keyString));
+//             continue;
+//         }
+//         QString valueString = PyString_AsString(pyRepresentation);
+//         group.writeEntry(keyString, valueString);
+//         Py_DECREF(pyRepresentation);
+//     }
+//     PyGILState_Release(state);
 
 }
 
