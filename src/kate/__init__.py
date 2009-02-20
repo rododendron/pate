@@ -321,11 +321,9 @@ def pateInit():
                     menu = QtGui.QMenu(a.menu)
                     nameToMenu[menuName] = window.menuBar().insertMenu(before, menu)
                 nameToMenu[menuName].addAction(a)
-        #
-        # XX The following lines cause a crash when switching sessions. @FIXME
-        #
-        # windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire, QtCore.Qt.QueuedConnection)
-        # windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire, QtCore.Qt.QueuedConnection)
+        # print 'init:', Kate.application(), application.activeMainWindow()
+        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire)
+        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire)
         _callAll(init.functions)
     QtCore.QTimer.singleShot(0, _initPhase2)
 
@@ -356,11 +354,7 @@ del pateDie
 
 def pateSessionInit():
     pass
-    # windowInterface = application.activeMainWindow()
-    # if windowInterface is not None:
-        # # this needs to be done per-session to avoid crash crash
-        # windowInterface.disconnect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire)
-        # windowInterface.disconnect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire)
+    # print 'new session:', Kate.application(), application.activeMainWindow()
 
 pate._sessionCreated = pateSessionInit
 del pateSessionInit
