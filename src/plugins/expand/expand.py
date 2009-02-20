@@ -1,10 +1,13 @@
 
 import kate
+import kate.gui
+
 import os
+import sys
+import re
+import imp
 import time
-# imp module used for custom importing, provides hooks into
-# Python's import mechanism
-import imp 
+import traceback
 
 from PyKDE4.kdecore import KConfig
 
@@ -197,14 +200,13 @@ def expandAtCursor():
     except ParseError, e:
         kate.popup('Parse error:', e)
         return
-    # get word and try to find word i
     word = unicode(document.text(word_range))
     mime = str(document.mimeType())
     expansions = loadExpansions(mime)
     try:
         func = expansions[word]
     except KeyError:
-        kate.popup('Expansion %r not found' % word)
+        kate.gui.popup('Expansion "%s" not found :(' % word, timeout=3, icon='dialog-warning', minTextWidth=200)
         return
     argument = ()
     if argument_range is not None:
@@ -217,7 +219,23 @@ def expandAtCursor():
     try:
         replacement = func(*argument)
     except Exception, e:
-        kate.popup(e)
+        # remove the top of the exception, it's our code
+        try:
+            type, value, tb = sys.exc_info()
+            sys.last_type = type
+            sys.last_value = value
+            sys.last_traceback = tb
+            tblist = traceback.extract_tb(tb)
+            del tblist[:1]
+            l = traceback.format_list(tblist)
+            if l:
+                l.insert(0, "Traceback (most recent call last):\n")
+            l[len(l):] = traceback.format_exception_only(type, value)
+        finally:
+            tblist = tb = None
+        s = ''.join(l).strip()
+        s = re.sub('File "(/[^\n]+)", line', replaceAbsolutePathWithLinkCallback, s)
+        kate.gui.popup('<p style="white-space:pre">%s</p>' % s, icon='dialog-error', timeout=5, maxTextWidth=None, minTextWidth=300)
         return
     
     try:
@@ -242,7 +260,6 @@ def expandAtCursor():
         else:
             break
     replacement = replacement.replace('\n', '\n' + whitespace)
-    print replacement
     # cursor position set?
     cursorAdvancement = None
     if '\1' in replacement:
@@ -259,10 +276,18 @@ def expandAtCursor():
     document.endEditing()
     
     if cursorAdvancement is not None:
-        print 'advancing', cursorAdvancement
+        # print 'advancing', cursorAdvancement
         smart = document.smartInterface().newSmartCursor(insertPosition)
         smart.advance(cursorAdvancement)
         view.setCursorPosition(smart)
+
+
+def replaceAbsolutePathWithLinkCallback(match):
+    text = match.group()
+    filePath = match.group(1)
+    fileName = os.path.basename(filePath)
+    text = text.replace(filePath, '<a href="%s">%s</a>' % (filePath, fileName))
+    return text
 
 
 # kate: space-indent on;

@@ -20,3 +20,6 @@ def python(s):
 	finally:
 		sys.stdout = old
 	return io.getvalue().strip() # should we always strip?
+
+def test(s):
+    raise ValueError(s)

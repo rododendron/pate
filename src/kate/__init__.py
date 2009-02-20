@@ -7,6 +7,7 @@ import traceback
 import functools
 
 import pate
+import kate.gui
 
 from PyQt4 import QtCore, QtGui
 from PyKDE4 import kdecore, kdeui
@@ -267,17 +268,6 @@ def sessionConfiguration():
     if plugins is not None:
         return pate.sessionConfiguration
 
-def popup(*message, **kwargs):
-    ''' Modeless message displaying, for providing the user with status
-    updates.
-    Keyword arguments:
-    * icon - icon to be loaded
-    * timeout - the time (in seconds) that the popup should be displayed
-                for. Defaults to five seconds '''
-    # TODO implement me
-    sys.stdout.write(' '.join(map(unicode, message)) + '\n')
-
-
 def objectIsAlive(obj):
     ''' Test whether an object is alive; that is, whether the pointer
     to the object still exists. '''
@@ -358,3 +348,5 @@ def pateSessionInit():
 
 pate._sessionCreated = pateSessionInit
 del pateSessionInit
+
+kate.gui.loadIcon = lambda s: kdeui.KIcon(s).pixmap(32, 32)
