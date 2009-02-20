@@ -19,6 +19,7 @@
 
 #include <iostream>
 
+#define PATE_UNLOAD
 
 
 K_EXPORT_COMPONENT_FACTORY(pateplugin, KGenericFactory<Pate::Plugin>("pate"))
@@ -39,12 +40,7 @@ Pate::Plugin::Plugin(QObject *parent, const QStringList &) : Kate::Plugin((Kate:
 }
 
 Pate::Plugin::~Plugin() {
-    Pate::Engine *p = Pate::Engine::self();
-#ifdef PATE_UNLOAD
-    p->unloadPlugins();
-    p->die();
-#endif
-    kDebug() << "Plugin deleted";
+//     Pate::Engine::self()->del();
 }
 
 
@@ -60,8 +56,9 @@ Kate::PluginView *Pate::Plugin::createView(Kate::MainWindow *window) {
  * XX should probably pickle.
  */
 void Pate::Plugin::readSessionConfig(KConfigBase *config, const QString &) {
-//     if(!Pate::Engine::self()->isInitialised())
-//         return;
+    if(!Pate::Engine::self()->isInitialised())
+        return;
+    Pate::Engine::self()->callModuleFunction("_sessionCreated");
 //     PyGILState_STATE state = PyGILState_Ensure();
 // 
 //     PyObject *d = Pate::Engine::self()->moduleDictionary();

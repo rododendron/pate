@@ -23,6 +23,7 @@
 #include "utilities.h"
 
 #define PATE_MODULE_NAME "pate" 
+#define THREADED 0
 
 
 static PyObject *pate_saveConfiguration(PyObject *self) {
@@ -49,20 +50,44 @@ Pate::Engine::Engine(QObject *parent) : QObject(parent) {
 
 Pate::Engine::~Engine() {
     // shut the interpreter down if it has been started
-    if(m_configuration) {
-        saveConfiguration();
-        Py_DECREF(m_configuration);
-        m_configuration = 0;
-    }
+    
+//     if(m_configuration) {
+//         saveConfiguration();
+//         Py_DECREF(m_configuration);
+//         m_configuration = 0;
+//     }
     if(m_initialised) {
-        die();
+        kDebug() << "Unloading m_pythonLibrary...";
+        kDebug() << m_pythonLibrary->unload();
+        delete m_pythonLibrary;
     }
 }
 
 Pate::Engine* Pate::Engine::self() {
-    if(!m_self)
+    if(!m_self) {
         m_self = new Pate::Engine(qApp);
+    }
     return m_self;
+}
+
+void Pate::Engine::del() {
+    kDebug() << "delete called";
+    if(!m_self)
+        return;
+    if(m_self->isInitialised()) {
+        kDebug() << "initialised, acquiring state...";
+#if THREADED
+        PyEval_AcquireThread(m_self->m_pythonThreadState);
+#endif
+        kDebug() << "state acquired. Calling _pluginsUnloaded..";
+        kDebug() << "Ok";
+        kDebug() << "Finalising...";
+        Py_Finalize();
+        kDebug() << "Finalised.";
+    }
+    delete m_self;
+    kDebug() << "deleted self";
+    m_self = 0;
 }
 
 bool Pate::Engine::isInitialised() {
@@ -72,17 +97,26 @@ bool Pate::Engine::isInitialised() {
 bool Pate::Engine::init() {
     if(m_initialised)
         return true;
+//     kDebug() << "Creating m_pythonLibrary";
     m_pythonLibrary = new QLibrary(PATE_PYTHON_LIBRARY, this);
     m_pythonLibrary->setLoadHints(QLibrary::ExportExternalSymbolsHint);
+//     kDebug() << "Caling m_pythonLibrary->load()..";
     if(!m_pythonLibrary->load()) {
         std::cerr << "Could not load " << PATE_PYTHON_LIBRARY << "\n";
         return false;
     }
+//     kDebug() << "success!";
+//     kDebug() << "Calling Py_Initialize and PyEval_InitThreads...";
     Py_Initialize();
+#if THREADED
     PyEval_InitThreads();
+#endif
+//     kDebug() << "success!";
     // initialise our built-in module and import it
+//     kDebug() << "Initting built-in module and importting...";
     Py_InitModule(PATE_MODULE_NAME, pateMethods);
     PyObject *pate = PyImport_ImportModule(PATE_MODULE_NAME);
+//     kDebug() << "success!";
     PyObject *pateModuleDictionary = PyModule_GetDict(pate);
     // host the configuration dictionary
     PyDict_SetItemString(pateModuleDictionary, "configuration", m_configuration);
@@ -90,16 +124,20 @@ bool Pate::Engine::init() {
     QString katePackageDirectory = KStandardDirs::locate("appdata", "plugins/pate/");
     PyObject *sysPath = PyDict_GetItemString(PyModule_GetDict(PyImport_ImportModule("sys")), "path");
     Py::appendStringToList(sysPath, katePackageDirectory);
+//     kDebug() << "Importing Kate...";
     PyObject *katePackage = PyImport_ImportModule("kate");
     if(!katePackage) {
         Py::traceback("Could not import the kate module. Dieing.");
-        die();
+        del();
         return false;
     }
+//     kDebug() << "success!";
     m_initialised = true;
     reloadConfiguration();
+#if THREADED
     m_pythonThreadState = PyGILState_GetThisThreadState();
     PyEval_ReleaseThread(m_pythonThreadState);
+#endif
     return true;
 }
 
@@ -118,22 +156,25 @@ void Pate::Engine::reloadConfiguration() {
     Py::updateDictionaryFromConfiguration(m_configuration, &config);
 }
 
-void Pate::Engine::die() {
-    PyEval_AcquireThread(m_pythonThreadState);
-    Py_Finalize();
-    // unload the library from memory
-    m_pythonLibrary->unload();
-    m_pythonLibrary = 0;
-    m_pluginsLoaded = false;
-    m_initialised = false;
-    kDebug() << "Pate::Engine::die() finished\n";
-}
+// void Pate::Engine::die() {
+//     PyEval_AcquireThread(m_pythonThreadState);
+//     Py_Finalize();
+//     // unload the library from memory
+//     m_pythonLibrary->unload();
+//     m_pythonLibrary = 0;
+//     m_pluginsLoaded = false;
+//     m_initialised = false;
+//     kDebug() << "Pate::Engine::die() finished\n";
+// }
 
 void Pate::Engine::loadPlugins() {
     if(m_pluginsLoaded)
         return;
     init();
+
+#if THREADED
     PyGILState_STATE state = PyGILState_Ensure();
+#endif
 
     PyObject *pate = PyImport_ImportModule(PATE_MODULE_NAME);
     PyObject *pateModuleDictionary = PyModule_GetDict(pate);
@@ -143,16 +184,14 @@ void Pate::Engine::loadPlugins() {
     PyObject *func = PyDict_GetItemString(moduleDictionary(), "_pluginsLoaded");
     if(!func) {
         kDebug() << "No " << PATE_MODULE_NAME << "._pluginsLoaded set";
-        return;
     }
     // everything is loaded and started. Call the module's init callback
-    if(!Py::call(func)) {
-        std::cerr << "Could not call " << PATE_MODULE_NAME << "._pluginsLoaded(). Dieing..\n";
-        die();
+    else if(!Py::call(func)) {
+        std::cerr << "Could not call " << PATE_MODULE_NAME << "._pluginsLoaded().";
     }
-    else {
-        PyGILState_Release(state);
-    }
+#if THREADED
+    PyGILState_Release(state);
+#endif
 }
 
 void Pate::Engine::unloadPlugins() {
@@ -163,31 +202,34 @@ void Pate::Engine::unloadPlugins() {
     if(!m_pluginsLoaded)
         return;
     kDebug() << "unloading";
+#if THREADED
     PyGILState_STATE state = PyGILState_Ensure();
-
+#endif
     PyObject *dict = moduleDictionary();
     PyObject *func = PyDict_GetItemString(dict, "_pluginsUnloaded");
     if(!func) {
         kDebug() << "No " << PATE_MODULE_NAME << "._pluginsUnloaded set";
-        PyGILState_Release(state);
-        return;
     }
-    // Remove each plugin from sys.modules
-    PyObject *modules = PyImport_GetModuleDict();
-    PyObject *plugins = PyDict_GetItemString(dict, "plugins");
-    for(Py_ssize_t i = 0, j = PyList_Size(plugins); i < j; ++i) {
-        PyObject *pluginName = PyDict_GetItemString(PyModule_GetDict(PyList_GetItem(plugins, i)), "__name__");
-        if(pluginName && PyDict_Contains(modules, pluginName)) {
-            PyDict_DelItem(modules, pluginName);
-            kDebug() << "Deleted" << PyString_AsString(pluginName) << "from sys.modules";
+    else {
+        // Remove each plugin from sys.modules
+        PyObject *modules = PyImport_GetModuleDict();
+        PyObject *plugins = PyDict_GetItemString(dict, "plugins");
+        for(Py_ssize_t i = 0, j = PyList_Size(plugins); i < j; ++i) {
+            PyObject *pluginName = PyDict_GetItemString(PyModule_GetDict(PyList_GetItem(plugins, i)), "__name__");
+            if(pluginName && PyDict_Contains(modules, pluginName)) {
+                PyDict_DelItem(modules, pluginName);
+                kDebug() << "Deleted" << PyString_AsString(pluginName) << "from sys.modules";
+            }
         }
+        PyDict_DelItemString(dict, "plugins");
+        Py_DECREF(plugins);
+        m_pluginsLoaded = false;
+        if(!Py::call(func))
+            std::cerr << "Could not call " << PATE_MODULE_NAME << "._pluginsUnloaded().\n";
     }
-    PyDict_DelItemString(dict, "plugins");
-    Py_DECREF(plugins);
-    m_pluginsLoaded = false;
-    if(!Py::call(func))
-        std::cerr << "Could not call " << PATE_MODULE_NAME << "._pluginsUnloaded().\n";
+#if THREADED
     PyGILState_Release(state);
+#endif
 
 }
 
@@ -274,6 +316,19 @@ PyObject *Pate::Engine::wrap(void *o, QString fullClassName) {
         return 0;
     }
     return result;
+}
+
+void Pate::Engine::callModuleFunction(const QString &name) {
+#if THREADED
+    PyGILState_STATE state = PyGILState_Ensure();
+#endif
+    PyObject *dict = moduleDictionary();
+    PyObject *func = PyDict_GetItemString(dict, PQ(name));
+    if(!Py::call(func))
+        kDebug() << "Could not call " << PATE_MODULE_NAME << "." << name << "().";    
+#if THREADED
+    PyGILState_Release(state);
+#endif
 }
 
 #include "engine.moc"

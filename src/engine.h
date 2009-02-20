@@ -22,6 +22,8 @@ class Engine : public QObject {
 public:
     static Engine* self();
     
+    void del();
+    
     /// Start the interpreter.
     bool init();
     
@@ -50,7 +52,10 @@ public:
     
     void loadPlugins();
     void unloadPlugins();
-
+    
+    
+    void callModuleFunction(const QString &name);
+    
 // signals:
 //     void populateConfiguration(PyObject *configurationDictionary);
 

@@ -321,14 +321,18 @@ def pateInit():
                     menu = QtGui.QMenu(a.menu)
                     nameToMenu[menuName] = window.menuBar().insertMenu(before, menu)
                 nameToMenu[menuName].addAction(a)
-        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire, QtCore.Qt.QueuedConnection)
-        windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire, QtCore.Qt.QueuedConnection)
+        #
+        # XX The following lines cause a crash when switching sessions. @FIXME
+        #
+        # windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire, QtCore.Qt.QueuedConnection)
+        # windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire, QtCore.Qt.QueuedConnection)
         _callAll(init.functions)
     QtCore.QTimer.singleShot(0, _initPhase2)
 
 # called by pate on initialisation
 pate._pluginsLoaded = pateInit
 del pateInit
+
 
 def pateDie():
     # Unload actions or things will crash
@@ -345,11 +349,18 @@ def pateDie():
     viewChanged.clear()
     viewCreated.clear()
     plugins = pluginDirectories = None
-    # disconnect signals
-    windowInterface = application.activeMainWindow()
-    if windowInterface is not None:
-        windowInterface.disconnect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire)
-        windowInterface.disconnect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire)
+
     
 pate._pluginsUnloaded = pateDie
 del pateDie
+
+def pateSessionInit():
+    pass
+    # windowInterface = application.activeMainWindow()
+    # if windowInterface is not None:
+        # # this needs to be done per-session to avoid crash crash
+        # windowInterface.disconnect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire)
+        # windowInterface.disconnect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire)
+
+pate._sessionCreated = pateSessionInit
+del pateSessionInit
