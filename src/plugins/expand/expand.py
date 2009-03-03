@@ -233,6 +233,13 @@ def expandAtCursor():
             l[len(l):] = traceback.format_exception_only(type, value)
         finally:
             tblist = tb = None
+        # convert file names in the traceback to links. Nice.
+        def replaceAbsolutePathWithLinkCallback(match):
+            text = match.group()
+            filePath = match.group(1)
+            fileName = os.path.basename(filePath)
+            text = text.replace(filePath, '<a href="%s">%s</a>' % (filePath, fileName))
+            return text
         s = ''.join(l).strip()
         s = re.sub('File "(/[^\n]+)", line', replaceAbsolutePathWithLinkCallback, s)
         kate.gui.popup('<p style="white-space:pre">%s</p>' % s, icon='dialog-error', timeout=5, maxTextWidth=None, minTextWidth=300)
@@ -280,14 +287,6 @@ def expandAtCursor():
         smart = document.smartInterface().newSmartCursor(insertPosition)
         smart.advance(cursorAdvancement)
         view.setCursorPosition(smart)
-
-
-def replaceAbsolutePathWithLinkCallback(match):
-    text = match.group()
-    filePath = match.group(1)
-    fileName = os.path.basename(filePath)
-    text = text.replace(filePath, '<a href="%s">%s</a>' % (filePath, fileName))
-    return text
 
 
 # kate: space-indent on;
