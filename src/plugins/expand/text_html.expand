@@ -17,3 +17,10 @@ def xhtml():
 </html>
 '''
 
+def script():
+    return '<script type="text/javascript">\n\1\n</script>'
+
+def css():
+    return '<style type="text/css">\n\1\n</script>'
+
+
