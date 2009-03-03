@@ -21,10 +21,16 @@ which specific packages are required for different distros is listed below.
 
 In the directory that you extracted Pâté, run
 
- $ ./configure
  $ cd build
+ $ cmake .. -DCMAKE_INSTALL_PREFIX=$(kde4-config --prefix)
  $ make
  # make install (as root)
+
+The plugins are not automatically installed for now. To install them, simply
+move them into the Kate application folder in a pate subdirectory, e.g.
+
+ $ cd ..
+ $ cp -r src/plugins $(kde4-config --localprefix)/share/apps/kate/pate
 
 
 ┌────────────────────────────────────┐
@@ -48,5 +54,5 @@ Also email me in the likely event that I have made a mistake with the instructio
 
 Enjoy Pâté!
 
-Paul <paul@giannaros.org>
+Paul Giannaros <paul@giannaros.org>
 
