@@ -307,7 +307,7 @@ def pateInit():
                 menuName = a.menu.lower().replace('&', '')
                 # create the menu if it doesn't exist
                 if menuName not in nameToMenu:
-                    gui.popup('Plugin wants to create an item in menu \'%s\' which does not exist' % a.menu, 2)
+                    gui.popup('Plugin wants to create an item in menu \'%s\' which does not exist' % a.menu, 2, minTextWidth=200)
                     # XX make creating new menus work
                     # before = nameToMenu['help'].menuAction()
                     # menu = QtGui.QMenu(a.menu)
