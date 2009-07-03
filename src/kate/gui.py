@@ -134,7 +134,7 @@ class TimeoutPassivePopup(QFrame):
         palette = self.palette()
         originalWindowText = palette.color(QPalette.WindowText)
         # why does the style use WindowText!?
-        palette.setColor(QPalette.WindowText, QColor(180, 180, 180))
+        palette.setColor(QPalette.WindowText, QColor(80, 80, 80))
         self.setPalette(palette)
         self.setFrameStyle(QFrame.Plain | QFrame.Box)
         self.timeout = timeout
