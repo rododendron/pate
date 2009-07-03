@@ -307,10 +307,14 @@ def pateInit():
                 menuName = a.menu.lower().replace('&', '')
                 # create the menu if it doesn't exist
                 if menuName not in nameToMenu:
-                    before = nameToMenu['help'].menuAction()
-                    menu = QtGui.QMenu(a.menu)
-                    nameToMenu[menuName] = window.menuBar().insertMenu(before, menu)
-                nameToMenu[menuName].addAction(a)
+                    gui.popup('Plugin wants to create an item in menu \'%s\' which does not exist' % a.menu, 2)
+                    # XX make creating new menus work
+                    # before = nameToMenu['help'].menuAction()
+                    # menu = QtGui.QMenu(a.menu)
+                    # window.menuBar().insertMenu(before, menu)
+                    # nameToMenu[menuName] = menu
+                else:
+                    nameToMenu[menuName].addAction(a)
         # print 'init:', Kate.application(), application.activeMainWindow()
         windowInterface.connect(windowInterface, QtCore.SIGNAL('viewChanged()'), viewChanged.fire)
         windowInterface.connect(windowInterface, QtCore.SIGNAL('viewCreated(KTextEditor::View*)'), viewCreated.fire)
