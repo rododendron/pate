@@ -8,7 +8,7 @@ import re
 def openingTagBeforeCursor(document, position):
     currentLine = unicode(document.line(position.line()))
     currentLine = currentLine[:position.column()].rstrip()
-    tag = re.compile('<\s*([^/].+?)(?:\s+[^<])?>')
+    tag = re.compile('<\s*([^/][^ ]*)(?:\s+[^>]+)?>')
     openTags = list(tag.finditer(currentLine))
     if openTags:
         lastMatch = max(openTags, key=lambda x: x.end())
