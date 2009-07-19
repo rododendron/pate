@@ -25,12 +25,14 @@ def closeTagAtCursor():
     insertionPosition = view.cursorPosition()
     tag = openingTagBeforeCursor(document, insertionPosition)
     onPreviousLine = False
+    tagLine = None
     if tag is None:
         insertionPosition.setLine(insertionPosition.line() - 1)
         if insertionPosition.isValid():
             insertionPosition.setColumn(document.lineLength(insertionPosition.line()))
             if insertionPosition.isValid():
                 tag = openingTagBeforeCursor(document, insertionPosition)
+                tagLine = unicode(document.line(insertionPosition.line()))
                 onPreviousLine = True
                 insertionPosition.setLine(currentPosition.line() + 1)
                 insertionPosition.setColumn(0)
@@ -39,11 +41,11 @@ def closeTagAtCursor():
         return
     
     currentLine = unicode(document.line(currentPosition.line()))
-    leadingSpacing = re.search('^\s*', currentLine).group(0)
-    document.startEditing()
-    insertionText = '%s</%s>' % (leadingSpacing, tag)
+    insertionText = u'</%s>' % tag
     if onPreviousLine:
-        insertionText += '\n'
+        leadingSpacing = re.search('^\s*', tagLine).group(0)
+        insertionText = '%s%s\n' % (leadingSpacing, insertionText)
+    document.startEditing()
     document.insertText(insertionPosition, insertionText)
     view.setCursorPosition(currentPosition)
     document.endEditing()
