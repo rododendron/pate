@@ -379,7 +379,7 @@ class KateConsoleDialog(QtGui.QDialog):
         QtGui.QDialog.closeEvent(self, e)
 
 
-@kate.action('Python Console', icon='utilities-terminal', shortcut='Ctrl+Shift+P', menu='Window')
+@kate.action('Python Console', icon='utilities-terminal', shortcut='Ctrl+Shift+P', menu='View')
 def showConsole():
     parent = kate.mainWindow()
     dialog = KateConsoleDialog(parent)
