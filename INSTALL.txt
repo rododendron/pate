@@ -4,20 +4,21 @@
 
 Pâté requires that you have installed:
 
-  ∙ Qt4
-  ∙ KDE4
+  ∙ Qt4 devel
+  ∙ KDE4 devel
   ∙ sip
   ∙ PyQt4
   ∙ PyKDE4
-  ∙ Kate
+  ∙ Kate devel
 
 Most Linux distributions should provide packages for these. More details on
-which specific packages are required for different distros is listed below.
+which specific packages are required for different distros is listed below
+in the "Distribution-specific Information" section".
 
 
-┌────────────────────────────────────┐
-│ General Installation Instructions  │
-└────────────────────────────────────┘
+┌───────────────────────────┐
+│ Compilation Instructions  │
+└───────────────────────────┘
 
 In the directory that you extracted Pâté, run
 
@@ -37,13 +38,34 @@ move them into the Kate application folder in a pate subdirectory, e.g.
 │ Distribution-specific Information  │
 └────────────────────────────────────┘
 
- ∙ openSUSE 10.3
+ • openSUSE 11.0
 
+   1. Add a KDE4 repository if you have not already done so (see
+      http://en.opensuse.org/KDE4).
+
+   2. Install python-kde4-devel, e.g. with:
+      $ zypper install python-kde4-devel
+      This should pull in sip, PyQt, and other related deps.
+
+   3. Install kate-devel if your KDE4 repository contains packages
+      for KDE > 4.3 or kde4-kate-devel otherwise
+
+
+• Ubuntu 9.04 (Jaunty)
+ 
+   1. Install the necessary dependencies with apt or synaptic:
+      $ apt-get install kdesdk-dev python-kde4-dev python-qt4-dev
+
+
+ • openSUSE 10.3
+ 
    1. Add the KDE:KDE4 stable repository by visiting http://en.opensuse.org/KDE4,
       clicking on the One-Click Install button, and following the wizard that follows.
+
    2. Install kde4-kate-devel and python-qt4 using YaST or zypper
       (e.g by running 'zypper install kde4-kate-devel python-qt4').
       Doing so should pull in all other necessary dependancies.
+
    3. As of the time of writing (26/02/2008) there are no PyKDE4 bindings in the repository,
       which is fairly criminal. You'll have to compile PyKDE4 yourself for now.
 
