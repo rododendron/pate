@@ -36,7 +36,6 @@ Pate::Plugin::Plugin(QObject *parent, const QStringList &) : Kate::Plugin((Kate:
     if(!Pate::Engine::self()->init()) {
         std::cerr << TERMINAL_RED << "Could not initialise Pate. Ouch!\n" << TERMINAL_CLEAR;
     }
-    Pate::Engine::self()->loadPlugins();
 }
 
 Pate::Plugin::~Plugin() {
@@ -45,6 +44,7 @@ Pate::Plugin::~Plugin() {
 
 
 Kate::PluginView *Pate::Plugin::createView(Kate::MainWindow *window) {
+    Pate::Engine::self()->loadPlugins();
     return new Pate::PluginView(window);
 }
 
