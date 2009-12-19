@@ -6,6 +6,7 @@
 #include <QStack>
 #include <QDir>
 #include <QFileInfo>
+#include <QFile>
 
 #include <kglobal.h>
 #include <kconfig.h>
@@ -263,9 +264,17 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
         foreach(QFileInfo info, infoList) {
             QString path = info.absoluteFilePath();
             if(info.isDir()) {
-                directories.push(QDir(info.absoluteFilePath()));
+            	QString pluginPath = path+"/"+path.section('/', -1)+".py";
+            	QFile f(pluginPath);
+            	if(f.exists()) {
+                    PyObject *d = Py::unicode(path);
+                    PyList_Insert(pythonPath, 0, d);
+                    Py_DECREF(d);
+					path = pluginPath;
+            	}
             }
-            else if(path.endsWith(".py")) {
+
+            if(path.endsWith(".py")) {
                 kDebug() << "Loading" << path;
                 // import and add to pate.plugins
                 QString pluginName = path.section('/', -1).section('.', 0, 0);
