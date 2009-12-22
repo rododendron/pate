@@ -264,14 +264,14 @@ void Pate::Engine::findAndLoadPlugins(PyObject *pateModuleDictionary) {
         foreach(QFileInfo info, infoList) {
             QString path = info.absoluteFilePath();
             if(info.isDir()) {
-            	QString pluginPath = path+"/"+path.section('/', -1)+".py";
-            	QFile f(pluginPath);
-            	if(f.exists()) {
+                QString pluginPath = path+"/"+path.section('/', -1)+".py";
+                QFile f(pluginPath);
+                if(f.exists()) {
                     PyObject *d = Py::unicode(path);
                     PyList_Insert(pythonPath, 0, d);
                     Py_DECREF(d);
-					path = pluginPath;
-            	}
+                    path = pluginPath;
+                }
             }
 
             if(path.endsWith(".py")) {
